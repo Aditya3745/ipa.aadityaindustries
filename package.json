@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "homepage": "https://aadityaindustries.online",
+  "homepage": "https://ipa.aadityaindustries.online",
   "scripts": {
     "dev": "vite",
     "build": "vite build && node -e \"require('fs').copyFileSync('dist/index.html', 'dist/404.html')\"",
@@ -20,6 +20,7 @@
     "@capacitor/ios": "^8.5.1",
     "@capacitor/share": "^8.0.1",
     "@google/model-viewer": "^4.3.1",
+    "@react-pdf/renderer": "^4.9.0",
     "@supabase/supabase-js": "^2.45.1",
     "framer-motion": "^11.3.24",
     "jspdf": "^4.2.1",

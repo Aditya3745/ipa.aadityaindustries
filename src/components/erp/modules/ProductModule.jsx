@@ -4,17 +4,38 @@ import { Plus, Printer } from 'lucide-react';
 import ProductCard from '../../ProductCard';
 import ProductDetailModal from '../../ProductDetailModal';
 
+import { pdf } from '@react-pdf/renderer';
+import { CatalogDocument } from './PdfCatalog';
+import { getWatermarkLogo, saveOrSharePDF } from '../../../utils/pdfGenerator';
+
 const cardStyle = { backgroundColor: 'white', padding: '1.5rem', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' };
 
-export const ProductModule = ({ products, setModalConfig, printProductsTable }) => {
+export const ProductModule = ({ products, setModalConfig }) => {
   const [previewProduct, setPreviewProduct] = useState(null);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+
+  const handlePrintCatalog = async () => {
+    setIsGeneratingPdf(true);
+    try {
+      const logoBase64 = await getWatermarkLogo();
+      const blob = await pdf(<CatalogDocument products={products} logoBase64={logoBase64} />).toBlob();
+      await saveOrSharePDF(blob, `Product_Catalog_${Date.now()}.pdf`, true);
+    } catch (e) {
+      console.error("Failed to generate PDF", e);
+      alert("Failed to generate PDF");
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
 
   return (
     <div style={cardStyle}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }} className="hide-on-print">
         <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Product Catalog</h2>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button onClick={printProductsTable} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', background: '#f1f5f9', color: '#0f172a', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}><Printer size={16} /></button>
+          <button onClick={handlePrintCatalog} disabled={isGeneratingPdf} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', background: '#f1f5f9', color: '#0f172a', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: isGeneratingPdf ? 'not-allowed' : 'pointer', fontWeight: 'bold' }}>
+            <Printer size={16} /> {isGeneratingPdf ? 'Generating...' : 'Print'}
+          </button>
           <button onClick={() => setModalConfig({ isOpen: true, type: 'product' })} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}><Plus size={16} /> Add</button>
         </div>
       </div>

@@ -4,7 +4,8 @@ import { Share } from '@capacitor/share';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 
 // Helper to save or share PDF
-const getWatermarkLogo = async () => {
+// Helper to save or share PDF
+export const getWatermarkLogo = async () => {
   try {
     const res = await fetch('/logo.png');
     const blob = await res.blob();
@@ -19,10 +20,22 @@ const getWatermarkLogo = async () => {
   }
 };
 
-const saveOrSharePDF = async (doc, fileName) => {
+export const saveOrSharePDF = async (doc, fileName, isReactPdfBlob = false) => {
   try {
+    let pdfBase64 = null;
+    if (isReactPdfBlob) {
+      // doc is a Blob
+      pdfBase64 = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result.split(',')[1]);
+        reader.readAsDataURL(doc);
+      });
+    } else {
+      // doc is jsPDF instance
+      pdfBase64 = doc.output('datauristring').split(',')[1];
+    }
+
     if (window.Capacitor && window.Capacitor.isNativePlatform()) {
-      const pdfBase64 = doc.output('datauristring').split(',')[1];
       const savedFile = await Filesystem.writeFile({
         path: fileName,
         data: pdfBase64,
@@ -33,7 +46,16 @@ const saveOrSharePDF = async (doc, fileName) => {
         url: savedFile.uri,
       });
     } else {
-      doc.save(fileName);
+      if (isReactPdfBlob) {
+        const url = URL.createObjectURL(doc);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        doc.save(fileName);
+      }
     }
   } catch (error) {
     console.error("Error saving PDF: ", error);
