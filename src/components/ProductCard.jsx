@@ -174,7 +174,7 @@ const ProductCard = ({ title, description, images, category, badge, materials, d
           <>
             <p className={styles.description}>{description}</p>
             <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-              <a href="#contact" className={styles.exploreButton} onClick={(e) => e.stopPropagation()} style={{ textDecoration: 'none', display: 'inline-block', flex: 1, textAlign: 'center' }}>Inquire Now</a>
+              <a href="#contact" className={`${styles.exploreButton} hide-on-print`} onClick={(e) => e.stopPropagation()} style={{ textDecoration: 'none', display: 'inline-block', flex: 1, textAlign: 'center' }}>Inquire Now</a>
               {(materials || dimensions || weight_capacity || colors) && (
                 <button onClick={(e) => { e.stopPropagation(); setShowSpecs(true); }} style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', color: '#475569', padding: '0.75rem 1.5rem', borderRadius: '4px', fontWeight: '600', cursor: 'pointer', flex: 1 }}>Specs</button>
               )}
@@ -190,7 +190,7 @@ const ProductCard = ({ title, description, images, category, badge, materials, d
               {colors && <li><strong>Colors:</strong> {colors}</li>}
             </ul>
             <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-              <a href="#contact" className={styles.exploreButton} onClick={(e) => e.stopPropagation()} style={{ textDecoration: 'none', display: 'inline-block', flex: 1, textAlign: 'center' }}>Inquire Now</a>
+              <a href="#contact" className={`${styles.exploreButton} hide-on-print`} onClick={(e) => e.stopPropagation()} style={{ textDecoration: 'none', display: 'inline-block', flex: 1, textAlign: 'center' }}>Inquire Now</a>
               <button onClick={(e) => { e.stopPropagation(); setShowSpecs(false); }} style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', color: '#475569', padding: '0.75rem 1.5rem', borderRadius: '4px', fontWeight: '600', cursor: 'pointer', flex: 1 }}>Description</button>
             </div>
           </div>

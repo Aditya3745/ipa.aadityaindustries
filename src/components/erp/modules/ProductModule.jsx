@@ -11,7 +11,7 @@ export const ProductModule = ({ products, setModalConfig, printProductsTable }) 
 
   return (
     <div style={cardStyle}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }} className="hide-on-print">
         <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Product Catalog</h2>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button onClick={printProductsTable} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', background: '#f1f5f9', color: '#0f172a', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}><Printer size={16} /></button>
@@ -19,6 +19,10 @@ export const ProductModule = ({ products, setModalConfig, printProductsTable }) 
         </div>
       </div>
       
+      <div className="catalog-cover">
+        <img src="/logo.png" alt="Aaditya Industries Logo" style={{ maxWidth: '400px', width: '80%', height: 'auto' }} />
+      </div>
+
       <div className="product-module-grid">
         {products.map((product, index) => (
           <ProductCard

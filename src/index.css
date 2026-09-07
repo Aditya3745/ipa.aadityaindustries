@@ -290,6 +290,10 @@ body {
   cursor: pointer;
 }
 
+.catalog-cover {
+  display: none;
+}
+
 .product-module-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -323,9 +327,23 @@ body {
   /* Ensure grids span the page */
   .product-module-grid {
     display: grid !important;
-    grid-template-columns: repeat(2, 1fr) !important;
+    grid-template-columns: repeat(3, 1fr) !important;
     gap: 10px !important;
     width: 100% !important;
+  }
+
+  .hide-on-print {
+    display: none !important;
+  }
+
+  .catalog-cover {
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh !important;
+    width: 100%;
+    page-break-after: always;
   }
 
   /* Prevent cards from breaking across pages */
