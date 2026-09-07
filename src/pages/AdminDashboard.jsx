@@ -21,6 +21,7 @@ import { StockModule } from '../components/erp/modules/StockModule';
 import { ManufacturingModule, ManufacturingModal } from '../components/erp/modules/ManufacturingModule';
 import { AccountsModule, TransactionModal } from '../components/erp/modules/AccountsModule';
 import { ReportModule } from '../components/erp/modules/ReportModule';
+import { OverviewModule } from '../components/erp/modules/OverviewModule';
 import CreatePurchaseForm from '../components/erp/CreatePurchaseForm';
 
 const AdminDashboard = () => {
@@ -252,6 +253,7 @@ const ModuleView = ({ view, data, actions }) => {
   const { setModalConfig, setCurrentView, printCustomersTable, printSalesTable, printSingleSale, printProductsTable, printSuppliersTable, printPurchasesTable, printStockTable, setEditTransactionData } = actions;
 
   // Extracted Modular Components
+  if (view === 'overview') return <OverviewModule data={data} setCurrentView={setCurrentView} />;
   if (view === 'supplier') return <SupplierModule suppliers={suppliers} setModalConfig={setModalConfig} printSuppliersTable={printSuppliersTable} />;
   if (view === 'employee') return <EmployeeModule employees={employees} setModalConfig={setModalConfig} />;
   if (view === 'users') return <UserModule users={users} setModalConfig={setModalConfig} />;
