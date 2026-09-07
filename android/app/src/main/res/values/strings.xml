@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Aaditya Industries</string>
+    <string name="title_activity_main">Aaditya Industries</string>
+    <string name="package_name">com.aadityaindustries.app</string>
+    <string name="custom_url_scheme">com.aadityaindustries.app</string>
+</resources>
