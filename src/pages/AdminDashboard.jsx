@@ -22,6 +22,7 @@ import { ManufacturingModule, ManufacturingModal } from '../components/erp/modul
 import { AccountsModule, TransactionModal } from '../components/erp/modules/AccountsModule';
 import { ReportModule } from '../components/erp/modules/ReportModule';
 import { OverviewModule } from '../components/erp/modules/OverviewModule';
+import { AboutModule } from '../components/erp/modules/AboutModule';
 import CreatePurchaseForm from '../components/erp/CreatePurchaseForm';
 
 const AdminDashboard = () => {
@@ -265,6 +266,7 @@ const ModuleView = ({ view, data, actions }) => {
   if (view === 'manufacturing') return <ManufacturingModule manufacturing={manufacturing} setModalConfig={setModalConfig} />;
   if (view === 'accounts') return <AccountsModule transactions={transactions} setModalConfig={setModalConfig} />;
   if (view === 'report') return <ReportModule report_logs={reportLogs} printSalesTable={printSalesTable} printCustomersTable={printCustomersTable} />;
+  if (view === 'about') return <AboutModule />;
 
   // Fallback for unbuilt modules
   const cardStyle = { backgroundColor: 'white', padding: '1.5rem', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' };
