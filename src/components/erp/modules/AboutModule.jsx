@@ -35,7 +35,7 @@ export const AboutModule = () => {
             <div style={{ padding: '0.75rem', backgroundColor: '#f1f5f9', borderRadius: '8px' }}><Phone size={20} color="#475569" /></div>
             <div>
               <p style={{ margin: 0, fontWeight: '500', color: '#1e293b' }}>Phone Support</p>
-              <a href="tel:+919835660992" style={{ color: '#3b82f6', textDecoration: 'none' }}>+91-9835660992</a>
+              <a href="tel:+916202759310" style={{ color: '#3b82f6', textDecoration: 'none' }}>+91-6202759310</a>
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>

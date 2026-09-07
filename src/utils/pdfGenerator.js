@@ -78,7 +78,7 @@ export const generateCollectiveReportPDF = async (title, tableColumn, tableRows)
   doc.setTextColor(0, 0, 0);
   doc.text("DEVI STHAN, LOHANIPUR-3", doc.internal.pageSize.getWidth() / 2, 26, { align: "center" });
   doc.text("GST: 10ENXPD2245A1ZL", doc.internal.pageSize.getWidth() / 2, 31, { align: "center" });
-  doc.text("info@aadityaindustries.com | +91-9835660992", doc.internal.pageSize.getWidth() / 2, 36, { align: "center" });
+  doc.text("info@aadityaindustries.com | +91-6202759310", doc.internal.pageSize.getWidth() / 2, 36, { align: "center" });
 
   doc.setLineWidth(0.5);
   doc.line(14, 40, doc.internal.pageSize.getWidth() - 14, 40);
