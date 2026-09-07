@@ -3,6 +3,7 @@ import { supabase } from '../../../supabase';
 import { Plus, Printer } from 'lucide-react';
 import ProductCard from '../../ProductCard';
 import ProductDetailModal from '../../ProductDetailModal';
+import { compressImageToWebP } from '../../../utils/imageUtils';
 
 import { pdf } from '@react-pdf/renderer';
 import { CatalogDocument } from './PdfCatalog';
@@ -103,18 +104,20 @@ export const ProductModal = ({ onClose, editData }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [productIdPreview, setProductIdPreview] = useState('AIND/PID/...');
 
-  const handleImageUpload = (e) => {
+  const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (file.size > 1.5 * 1024 * 1024) { // 1.5MB limit
-         alert('Please select an image smaller than 1.5MB');
+      if (file.size > 5 * 1024 * 1024) { // Increased to 5MB since we compress
+         alert('Please select an image smaller than 5MB');
          return;
       }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData({ ...formData, image_url: reader.result });
-      };
-      reader.readAsDataURL(file);
+      try {
+        const webpBase64 = await compressImageToWebP(file, 800, 0.8);
+        setFormData({ ...formData, image_url: webpBase64 });
+      } catch (err) {
+        console.error("Failed to compress image", err);
+        alert("Failed to process image.");
+      }
     }
   };
 
