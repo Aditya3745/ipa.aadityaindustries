@@ -126,10 +126,15 @@ export const ProductModal = ({ onClose, editData }) => {
       setProductIdPreview(editData.product_id);
     } else {
       const fetchSeq = async () => {
-        const { data } = await supabase.from('sequence_manager').select('*').eq('seq_name', 'PROD_ID').single();
-        if (data) {
-          setProductIdPreview(`${data.prefix || 'AIND/PID/'}${String((data.current_val || 0) + 1).padStart(3, '0')}`);
+        const { data: productsData } = await supabase.from('products').select('product_id').order('product_id', { ascending: false }).limit(1);
+        let nextVal = 1;
+        if (productsData && productsData.length > 0 && productsData[0].product_id) {
+          const match = productsData[0].product_id.match(/(\d+)$/);
+          if (match) {
+            nextVal = parseInt(match[1], 10) + 1;
+          }
         }
+        setProductIdPreview(`AIND/PID/${String(nextVal).padStart(3, '0')}`);
       };
       fetchSeq();
     }
@@ -161,14 +166,21 @@ export const ProductModal = ({ onClose, editData }) => {
         if (error) throw error;
         alert("Product updated successfully!");
       } else {
-        const { data: seqData } = await supabase.from('sequence_manager').select('*').eq('seq_name', 'PROD_ID').single();
-        let newSeqVal = 1; let prefix = 'AIND/PID/';
-        if (seqData) { newSeqVal = (seqData.current_val || 0) + 1; prefix = seqData.prefix || prefix; }
-        productData.product_id = `${prefix}${String(newSeqVal).padStart(3, '0')}`;
+        const { data: productsData } = await supabase.from('products').select('product_id').order('product_id', { ascending: false }).limit(1);
+        let nextVal = 1; let prefix = 'AIND/PID/';
+        if (productsData && productsData.length > 0 && productsData[0].product_id) {
+          const match = productsData[0].product_id.match(/(\d+)$/);
+          if (match) {
+            nextVal = parseInt(match[1], 10) + 1;
+            prefix = productsData[0].product_id.substring(0, productsData[0].product_id.length - match[1].length);
+          }
+        }
+        productData.product_id = `${prefix}${String(nextVal).padStart(3, '0')}`;
         
         const { error } = await supabase.from('products').insert([productData]);
         if (error) throw error;
-        await supabase.from('sequence_manager').update({ current_val: newSeqVal }).eq('seq_name', 'PROD_ID');
+        // Optionally update sequence manager so it's not too far behind
+        await supabase.from('sequence_manager').update({ current_val: nextVal }).eq('seq_name', 'PROD_ID');
         alert("Product added successfully!");
       }
       onClose();
