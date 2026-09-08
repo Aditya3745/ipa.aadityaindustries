@@ -13,6 +13,7 @@ export const ContactModule = ({ suppliers = [], customers = [] }) => {
     const formattedSuppliers = suppliers.map(s => ({
       id: `sup_${s.supplier_id || s.id}`,
       name: s.supp_comp_name || s.vendor_name || s.name || 'Unknown Supplier',
+      contactPerson: s.supp_comp_person || s.contact_person || '',
       type: 'Supplier',
       mobile: s.supp_comp_no || s.supp_comp_person_no || s.phone || s.mobile || '',
       balance: s.supplier_balance || s.balance || s.opening_balance || 0,
@@ -22,6 +23,7 @@ export const ContactModule = ({ suppliers = [], customers = [] }) => {
     const formattedCustomers = customers.map(c => ({
       id: `cust_${c.customer_id || c.id}`,
       name: c.cust_comp_name || c.customer_name || c.name || 'Unknown Customer',
+      contactPerson: c.cust_comp_person || c.contact_person || '',
       type: 'Customer',
       mobile: c.cust_comp_no || c.cust_comp_person_no || c.customer_phone || c.phone || '',
       balance: c.customer_balance || c.balance || c.outstanding_balance || 0,
@@ -76,6 +78,11 @@ export const ContactModule = ({ suppliers = [], customers = [] }) => {
                 </div>
                 <div>
                   <h3 style={{ margin: '0 0 0.25rem 0', fontSize: '1rem', color: '#0f172a' }}>{contact.name}</h3>
+                  {contact.contactPerson && (
+                    <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.875rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                      <User size={12} /> {contact.contactPerson}
+                    </p>
+                  )}
                   <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', fontSize: '0.75rem' }}>
                     <span style={{ 
                       padding: '2px 6px', 
