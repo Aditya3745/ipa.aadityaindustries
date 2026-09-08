@@ -1,17 +1,19 @@
 import React, { useState, useMemo } from 'react';
-import { PhoneCall, Search, User, Briefcase } from 'lucide-react';
+import { PhoneCall, Search, User, Briefcase, ArrowLeft, FileText, Activity } from 'lucide-react';
 
 const cardStyle = { backgroundColor: 'white', padding: '1.5rem', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' };
 const inputStyle = { width: '100%', padding: '0.75rem 1rem 0.75rem 2.5rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.875rem' };
 
-export const ContactModule = ({ suppliers = [], customers = [] }) => {
+export const ContactModule = ({ suppliers = [], customers = [], sales = [], purchases = [], transactions = [] }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState('all'); // all, supplier, customer
+  const [filterType, setFilterType] = useState('all'); 
+  const [selectedContact, setSelectedContact] = useState(null);
 
   // Combine and format contacts
   const contacts = useMemo(() => {
     const formattedSuppliers = suppliers.map(s => ({
       id: `sup_${s.supplier_id || s.id}`,
+      rawId: s.supplier_id || s.id,
       name: s.supp_comp_name || s.vendor_name || s.name || 'Unknown Supplier',
       contactPerson: s.supp_comp_person || s.contact_person || '',
       type: 'Supplier',
@@ -22,6 +24,7 @@ export const ContactModule = ({ suppliers = [], customers = [] }) => {
 
     const formattedCustomers = customers.map(c => ({
       id: `cust_${c.customer_id || c.id}`,
+      rawId: c.customer_id || c.id,
       name: c.cust_comp_name || c.customer_name || c.name || 'Unknown Customer',
       contactPerson: c.cust_comp_person || c.contact_person || '',
       type: 'Customer',
@@ -39,6 +42,115 @@ export const ContactModule = ({ suppliers = [], customers = [] }) => {
     const matchesType = filterType === 'all' || contact.type.toLowerCase() === filterType;
     return matchesSearch && matchesType;
   });
+
+  if (selectedContact) {
+    const isSupplier = selectedContact.type === 'Supplier';
+    let totalBilled = 0;
+    let history = [];
+
+    if (isSupplier) {
+      const contactPurchases = purchases.filter(p => p.supplier_id === selectedContact.rawId);
+      totalBilled = contactPurchases.reduce((sum, p) => sum + (Number(p.grand_total) || 0), 0);
+      history = [
+        ...contactPurchases.map(p => ({
+          date: p.purchase_date || p.created_at,
+          title: `Purchase Order: ${p.purchase_id}`,
+          amount: p.grand_total,
+          type: 'invoice'
+        })),
+        ...transactions.filter(t => t.description?.includes(selectedContact.name)).map(t => ({
+          date: t.transaction_date || t.created_at,
+          title: t.description || 'Payment',
+          amount: t.amount,
+          type: 'payment',
+          method: t.payment_method
+        }))
+      ];
+    } else {
+      const contactSales = sales.filter(s => s.customer_name === selectedContact.name);
+      totalBilled = contactSales.reduce((sum, s) => sum + (Number(s.grand_total) || 0), 0);
+      history = [
+        ...contactSales.map(s => ({
+          date: s.sale_date || s.created_at,
+          title: `Sale Invoice: ${s.id || s.sale_id}`,
+          amount: s.grand_total,
+          type: 'invoice'
+        })),
+        ...transactions.filter(t => t.description?.includes(selectedContact.name)).map(t => ({
+          date: t.transaction_date || t.created_at,
+          title: t.description || 'Payment Received',
+          amount: t.amount,
+          type: 'payment',
+          method: t.payment_method
+        }))
+      ];
+    }
+
+    history.sort((a, b) => new Date(b.date) - new Date(a.date));
+    const currentDues = selectedContact.balance || 0;
+    const totalReceived = Math.max(0, totalBilled - currentDues);
+
+    return (
+      <div style={cardStyle}>
+        <button onClick={() => setSelectedContact(null)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem', padding: 0 }}>
+          <ArrowLeft size={20} /> Back to Directory
+        </button>
+        
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
+          <div style={{ padding: '1rem', backgroundColor: '#f1f5f9', borderRadius: '12px' }}>
+            {selectedContact.icon}
+          </div>
+          <div>
+            <h2 style={{ margin: '0 0 0.25rem 0', fontSize: '1.5rem' }}>{selectedContact.name}</h2>
+            {selectedContact.contactPerson && <p style={{ margin: '0 0 0.25rem 0', color: '#64748b' }}><User size={14} style={{ marginRight: '4px' }}/>{selectedContact.contactPerson}</p>}
+            <p style={{ margin: 0, color: '#64748b' }}><PhoneCall size={14} style={{ marginRight: '4px' }}/>{selectedContact.mobile || 'No Phone'}</p>
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
+          <div style={{ backgroundColor: '#f8fafc', padding: '1.25rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+            <p style={{ margin: '0 0 0.5rem 0', color: '#64748b', fontSize: '0.875rem' }}>Total {isSupplier ? 'Purchased' : 'Billed'}</p>
+            <h3 style={{ margin: 0, fontSize: '1.5rem', color: '#0f172a' }}>₹{totalBilled.toLocaleString()}</h3>
+          </div>
+          <div style={{ backgroundColor: '#f0fdf4', padding: '1.25rem', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+            <p style={{ margin: '0 0 0.5rem 0', color: '#166534', fontSize: '0.875rem' }}>Total {isSupplier ? 'Paid' : 'Received'}</p>
+            <h3 style={{ margin: 0, fontSize: '1.5rem', color: '#15803d' }}>₹{totalReceived.toLocaleString()}</h3>
+          </div>
+          <div style={{ backgroundColor: '#fef2f2', padding: '1.25rem', borderRadius: '8px', border: '1px solid #fecaca' }}>
+            <p style={{ margin: '0 0 0.5rem 0', color: '#991b1b', fontSize: '0.875rem' }}>Remaining {isSupplier ? 'to Pay' : 'Dues'}</p>
+            <h3 style={{ margin: 0, fontSize: '1.5rem', color: '#b91c1c' }}>₹{currentDues.toLocaleString()}</h3>
+          </div>
+        </div>
+
+        <h3 style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <Activity size={20} /> Transaction History
+        </h3>
+        
+        {history.length > 0 ? (
+          <div style={{ display: 'grid', gap: '0.75rem' }}>
+            {history.map((h, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: 'white' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <div style={{ padding: '0.5rem', backgroundColor: h.type === 'invoice' ? '#eff6ff' : '#ecfdf5', borderRadius: '8px' }}>
+                    {h.type === 'invoice' ? <FileText size={20} color="#3b82f6" /> : <Activity size={20} color="#10b981" />}
+                  </div>
+                  <div>
+                    <p style={{ margin: '0 0 0.25rem 0', fontWeight: '500', color: '#0f172a' }}>{h.title}</p>
+                    <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b' }}>{new Date(h.date).toLocaleDateString()} {h.method && `via ${h.method}`}</p>
+                  </div>
+                </div>
+                <div style={{ fontWeight: '600', color: h.type === 'invoice' ? '#0f172a' : (isSupplier ? '#ef4444' : '#10b981') }}>
+                  {h.type === 'payment' ? (isSupplier ? '-' : '+') : ''}₹{Number(h.amount || 0).toLocaleString()}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p style={{ color: '#64748b', textAlign: 'center', padding: '2rem' }}>No transaction history found for this contact.</p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div style={cardStyle}>
@@ -71,7 +183,7 @@ export const ContactModule = ({ suppliers = [], customers = [] }) => {
       <div style={{ display: 'grid', gap: '1rem' }}>
         {filteredContacts.length > 0 ? (
           filteredContacts.map(contact => (
-            <div key={contact.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem', border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#f8fafc' }}>
+            <div key={contact.id} onClick={() => setSelectedContact(contact)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem', border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#f8fafc', cursor: 'pointer', transition: 'background-color 0.2s' }} onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'} onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                 <div style={{ padding: '0.5rem', backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
                   {contact.icon}
@@ -104,6 +216,7 @@ export const ContactModule = ({ suppliers = [], customers = [] }) => {
               {contact.mobile ? (
                 <a 
                   href={`tel:${contact.mobile}`}
+                  onClick={(e) => e.stopPropagation()}
                   style={{ 
                     display: 'flex', alignItems: 'center', gap: '0.5rem', 
                     padding: '0.5rem 1rem', backgroundColor: '#10b981', color: 'white', 

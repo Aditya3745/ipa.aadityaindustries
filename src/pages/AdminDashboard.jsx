@@ -268,7 +268,7 @@ const ModuleView = ({ view, data, actions }) => {
   if (view === 'accounts') return <AccountsModule transactions={transactions} setModalConfig={setModalConfig} />;
   if (view === 'report') return <ReportModule report_logs={reportLogs} printSalesTable={printSalesTable} printCustomersTable={printCustomersTable} />;
   if (view === 'about') return <AboutModule />;
-  if (view === 'contact') return <ContactModule suppliers={suppliers} customers={customers} />;
+  if (view === 'contact') return <ContactModule suppliers={suppliers} customers={customers} sales={sales} purchases={purchases} transactions={transactions} />;
 
   // Fallback for unbuilt modules
   const cardStyle = { backgroundColor: 'white', padding: '1.5rem', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' };
