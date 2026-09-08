@@ -7,27 +7,26 @@ const BottomNav = () => {
     <nav className="bottom-nav">
       <div className="bottom-nav-container">
         <NavLink 
-          to="/" 
-          className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}
-          end
+          to="/admin/dashboard?module=overview" 
+          className={({ isActive }) => `bottom-nav-item ${window.location.search.includes('overview') ? 'active' : ''}`}
         >
           <Home size={24} />
           <span>Home</span>
         </NavLink>
         <NavLink 
-          to="/products" 
-          className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}
+          to="/admin/dashboard?module=product" 
+          className={({ isActive }) => `bottom-nav-item ${window.location.search.includes('product') ? 'active' : ''}`}
         >
           <Package size={24} />
           <span>Products</span>
         </NavLink>
-        <a 
-          href="#contact" 
-          className="bottom-nav-item"
+        <NavLink 
+          to="/admin/dashboard?module=contact" 
+          className={({ isActive }) => `bottom-nav-item ${window.location.search.includes('contact') ? 'active' : ''}`}
         >
           <Phone size={24} />
           <span>Contact</span>
-        </a>
+        </NavLink>
       </div>
     </nav>
   );
