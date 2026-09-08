@@ -124,6 +124,13 @@ export const ProductModal = ({ onClose, editData }) => {
   useEffect(() => {
     if (editData) {
       setProductIdPreview(editData.product_id);
+      const fetchExistingStock = async () => {
+        const { data: stockData } = await supabase.from('stock').select('quantity').eq('product_id', editData.product_id).maybeSingle();
+        if (stockData) {
+          setFormData(prev => ({ ...prev, stock_count: stockData.quantity }));
+        }
+      };
+      fetchExistingStock();
     } else {
       const fetchSeq = async () => {
         const { data: productsData } = await supabase.from('products').select('product_id').order('product_id', { ascending: false }).limit(1);
@@ -166,7 +173,7 @@ export const ProductModal = ({ onClose, editData }) => {
         if (error) throw error;
         
         // Try updating existing stock, or create if missing
-        const { data: existingStock } = await supabase.from('stock').select('stock_id').eq('product_id', editData.product_id).single();
+        const { data: existingStock, error: stockFetchErr } = await supabase.from('stock').select('stock_id').eq('product_id', editData.product_id).maybeSingle();
         if (existingStock) {
           await supabase.from('stock').update({ quantity: formData.stock_count || 0, min_quantity: formData.reorder_level || 0 }).eq('product_id', editData.product_id);
         } else {
