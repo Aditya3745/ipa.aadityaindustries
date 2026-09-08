@@ -140,8 +140,8 @@ export const OverviewModule = ({ data, setCurrentView }) => {
                   </p>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <p style={{ margin: '0 0 0.25rem 0', fontWeight: '600', color: txn.transaction_type === 'income' ? '#10b981' : '#ef4444' }}>
-                    {txn.transaction_type === 'income' ? '+' : '-'}₹{Number(txn.amount || 0).toLocaleString()}
+                  <p style={{ margin: '0 0 0.25rem 0', fontWeight: '600', color: (txn.transaction_type || '').toLowerCase() === 'income' ? '#10b981' : '#ef4444' }}>
+                    {(txn.transaction_type || '').toLowerCase() === 'income' ? '+' : '-'}₹{Number(txn.amount || 0).toLocaleString()}
                   </p>
                   <span style={{ fontSize: '0.75rem', padding: '0.125rem 0.5rem', borderRadius: '12px', backgroundColor: '#f1f5f9', color: '#64748b' }}>
                     {txn.payment_method || 'Unknown'}
