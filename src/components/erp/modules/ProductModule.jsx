@@ -164,6 +164,15 @@ export const ProductModal = ({ onClose, editData }) => {
       if (editData) {
         const { error } = await supabase.from('products').update(productData).eq('product_id', editData.product_id);
         if (error) throw error;
+        
+        // Try updating existing stock, or create if missing
+        const { data: existingStock } = await supabase.from('stock').select('stock_id').eq('product_id', editData.product_id).single();
+        if (existingStock) {
+          await supabase.from('stock').update({ quantity: formData.stock_count || 0, min_quantity: formData.reorder_level || 0 }).eq('product_id', editData.product_id);
+        } else {
+          await supabase.from('stock').insert([{ product_id: editData.product_id, quantity: formData.stock_count || 0, location: 'Main Warehouse', min_quantity: formData.reorder_level || 0 }]);
+        }
+
         alert("Product updated successfully!");
       } else {
         const { data: productsData } = await supabase.from('products').select('product_id').order('product_id', { ascending: false }).limit(1);
@@ -179,6 +188,17 @@ export const ProductModal = ({ onClose, editData }) => {
         
         const { error } = await supabase.from('products').insert([productData]);
         if (error) throw error;
+        
+        // Initialize stock for new product
+        const stockData = {
+          product_id: productData.product_id,
+          quantity: formData.stock_count || 0,
+          location: 'Main Warehouse',
+          min_quantity: formData.reorder_level || 0
+        };
+        const { error: stockError } = await supabase.from('stock').insert([stockData]);
+        if (stockError) console.error("Failed to initialize stock:", stockError);
+
         // Optionally update sequence manager so it's not too far behind
         await supabase.from('sequence_manager').update({ current_val: nextVal }).eq('seq_name', 'PROD_ID');
         alert("Product added successfully!");
