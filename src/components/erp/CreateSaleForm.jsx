@@ -13,6 +13,7 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
   const [isManualCustomer, setIsManualCustomer] = useState(false);
   const [manualName, setManualName] = useState('');
   const [manualGst, setManualGst] = useState('');
+  const [withoutGst, setWithoutGst] = useState(false);
   const [cart, setCart] = useState([]);
   
   // Item Entry State
@@ -109,9 +110,9 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
 
   // Calculations
   const subtotal = cart.reduce((sum, item) => sum + item.total_price, 0);
-  const cgstTotal = cart.reduce((sum, item) => sum + (item.total_price * (item.cgst || 0) / 100), 0);
-  const sgstTotal = cart.reduce((sum, item) => sum + (item.total_price * (item.sgst || 0) / 100), 0);
-  const igstTotal = cart.reduce((sum, item) => sum + (item.total_price * (item.igst || 0) / 100), 0);
+  const cgstTotal = withoutGst ? 0 : cart.reduce((sum, item) => sum + (item.total_price * (item.cgst || 0) / 100), 0);
+  const sgstTotal = withoutGst ? 0 : cart.reduce((sum, item) => sum + (item.total_price * (item.sgst || 0) / 100), 0);
+  const igstTotal = withoutGst ? 0 : cart.reduce((sum, item) => sum + (item.total_price * (item.igst || 0) / 100), 0);
   const taxTotal = cgstTotal + sgstTotal + igstTotal;
   const grandTotal = subtotal + taxTotal - Number(discount) + Number(transport);
   const dues = grandTotal - Number(advance);
@@ -170,19 +171,19 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
         if (saleError) throw saleError;
       }
 
-      const itemsData = cart.map(item => ({
+      const itemsToInsert = cart.map(item => ({
         sale_item_id: item.sale_item_id,
         sale_id: saleId,
         product_id: item.product_id,
         quantity: item.quantity,
         unit_price: item.unit_price,
-        cgst: item.cgst,
-        sgst: item.sgst,
-        igst: item.igst,
+        cgst: withoutGst ? 0 : item.cgst,
+        sgst: withoutGst ? 0 : item.sgst,
+        igst: withoutGst ? 0 : item.igst,
         total_price: item.total_price
       }));
 
-      const { error: itemsError } = await supabase.from('sale_items').insert(itemsData);
+      const { error: itemsError } = await supabase.from('sale_items').insert(itemsToInsert);
       if (itemsError) throw itemsError;
 
       if (!editData) {
@@ -449,6 +450,11 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
                 <span>= Grand Total</span>
                 <span>₹{grandTotal.toFixed(2)}</span>
               </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1.5rem', backgroundColor: '#f1f5f9', padding: '0.75rem', borderRadius: '8px' }}>
+              <input type="checkbox" id="noGstSale" checked={withoutGst} onChange={(e) => setWithoutGst(e.target.checked)} style={{ width: '1.25rem', height: '1.25rem', cursor: 'pointer' }} />
+              <label htmlFor="noGstSale" style={{ cursor: 'pointer', fontWeight: '500', color: '#0f172a' }}>Without GST (Apply 0% Tax)</label>
             </div>
 
             <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>

@@ -6,6 +6,7 @@ import { logTransaction } from '../../utils/transactionLogger';
 const CreatePurchaseForm = ({ onBack, onSuccess, editData }) => {
   const [suppliers, setSuppliers] = useState([]);
   const [products, setProducts] = useState([]);
+  const [withoutGst, setWithoutGst] = useState(false);
   
   // Selection States
   const [selectedSupplier, setSelectedSupplier] = useState(null);
@@ -102,9 +103,9 @@ const CreatePurchaseForm = ({ onBack, onSuccess, editData }) => {
 
   // Calculations
   const subtotal = cart.reduce((sum, item) => sum + item.total_cost, 0);
-  const cgstTotal = cart.reduce((sum, item) => sum + (item.total_cost * (item.cgst || 0) / 100), 0);
-  const sgstTotal = cart.reduce((sum, item) => sum + (item.total_cost * (item.sgst || 0) / 100), 0);
-  const igstTotal = cart.reduce((sum, item) => sum + (item.total_cost * (item.igst || 0) / 100), 0);
+  const cgstTotal = withoutGst ? 0 : cart.reduce((sum, item) => sum + (item.total_cost * (item.cgst || 0) / 100), 0);
+  const sgstTotal = withoutGst ? 0 : cart.reduce((sum, item) => sum + (item.total_cost * (item.sgst || 0) / 100), 0);
+  const igstTotal = withoutGst ? 0 : cart.reduce((sum, item) => sum + (item.total_cost * (item.igst || 0) / 100), 0);
   const taxTotal = cgstTotal + sgstTotal + igstTotal;
   const grandTotal = subtotal + taxTotal - Number(discount) + Number(transport);
   const dues = grandTotal - Number(advance);
@@ -169,9 +170,9 @@ const CreatePurchaseForm = ({ onBack, onSuccess, editData }) => {
         product_id: item.product_id,
         quantity: item.quantity,
         unit_cost: item.unit_cost,
-        cgst: item.cgst,
-        sgst: item.sgst,
-        igst: item.igst,
+        cgst: withoutGst ? 0 : item.cgst,
+        sgst: withoutGst ? 0 : item.sgst,
+        igst: withoutGst ? 0 : item.igst,
         total_cost: item.total_cost
       }));
 
@@ -402,6 +403,11 @@ const CreatePurchaseForm = ({ onBack, onSuccess, editData }) => {
                 <span>= Grand Total</span>
                 <span>₹{grandTotal.toFixed(2)}</span>
               </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1.5rem', backgroundColor: '#f1f5f9', padding: '0.75rem', borderRadius: '8px' }}>
+              <input type="checkbox" id="noGstPur" checked={withoutGst} onChange={(e) => setWithoutGst(e.target.checked)} style={{ width: '1.25rem', height: '1.25rem', cursor: 'pointer' }} />
+              <label htmlFor="noGstPur" style={{ cursor: 'pointer', fontWeight: '500', color: '#0f172a' }}>Without GST (Apply 0% Tax)</label>
             </div>
 
             <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
