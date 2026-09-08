@@ -166,6 +166,14 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
         const { error: saleError } = await supabase.from('sales').update(saleData).eq('sale_id', editData.sale_id);
         if (saleError) throw saleError;
 
+        // Revert old stock
+        for (let oldItem of (editData.sale_items || [])) {
+          const { data: stockData } = await supabase.from('stock').select('*').eq('product_id', oldItem.product_id).maybeSingle();
+          if (stockData) {
+            await supabase.from('stock').update({ quantity: stockData.quantity + oldItem.quantity }).eq('product_id', oldItem.product_id);
+          }
+        }
+
         // Delete old items and insert new
         await supabase.from('sale_items').delete().eq('sale_id', editData.sale_id);
       } else {
@@ -204,6 +212,23 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
       if (duesDiff !== 0) {
         const newBalance = Number(selectedCustomer.customer_balance || 0) + duesDiff;
         await supabase.from('customers').update({ customer_balance: newBalance }).eq('customer_id', selectedCustomer.customer_id);
+      }
+
+      // Apply new stock (decrease stock for sales)
+      for (let item of cart) {
+        const { data: stockData } = await supabase.from('stock').select('*').eq('product_id', item.product_id).maybeSingle();
+        if (stockData) {
+          await supabase.from('stock').update({ quantity: Math.max(0, stockData.quantity - item.quantity) }).eq('product_id', item.product_id);
+        } else {
+          const { data: sSeq } = await supabase.from('sequence_manager').select('*').eq('seq_name', 'STOCK_ID').maybeSingle();
+          let sVal = 1; if (sSeq) sVal = (sSeq.current_val || 0) + 1;
+          await supabase.from('stock').insert([{ stock_id: `AIND/STK/${String(sVal).padStart(3, '0')}`, product_id: item.product_id, quantity: 0, location: 'Main Warehouse', min_quantity: 0 }]);
+          if (sSeq) {
+             await supabase.from('sequence_manager').update({ current_val: sVal }).eq('seq_name', 'STOCK_ID');
+          } else {
+             await supabase.from('sequence_manager').insert([{ seq_name: 'STOCK_ID', current_val: sVal, prefix: 'AIND/STK/' }]);
+          }
+        }
       }
 
       // Log Transaction
