@@ -136,6 +136,9 @@ const CreatePurchaseForm = ({ onBack, onSuccess, editData }) => {
       delivery_date: deliveryDate || null,
       total_amount: subtotal,
       discount: Number(discount),
+      cgst: cgstTotal,
+      sgst: sgstTotal,
+      igst: igstTotal,
       tax: taxTotal,
       transport: Number(transport),
       grand_total: grandTotal,
@@ -155,7 +158,7 @@ const CreatePurchaseForm = ({ onBack, onSuccess, editData }) => {
         for (let oldItem of (editData.purchase_items || [])) {
           const { data: stockData } = await supabase.from('stock').select('*').eq('product_id', oldItem.product_id).maybeSingle();
           if (stockData) {
-            await supabase.from('stock').update({ quantity: Math.max(0, stockData.quantity - oldItem.quantity) }).eq('product_id', oldItem.product_id);
+            await supabase.from('stock').update({ quantity: stockData.quantity - oldItem.quantity }).eq('product_id', oldItem.product_id);
           }
         }
 
@@ -191,11 +194,23 @@ const CreatePurchaseForm = ({ onBack, onSuccess, editData }) => {
 
       // Update supplier balance based on dues difference
       const oldDues = editData ? (editData.grand_total - editData.advance_amount) : 0;
-      const duesDiff = dues - oldDues;
-
-      if (duesDiff !== 0) {
-        const newBalance = Number(selectedSupplier.supplier_balance || 0) + duesDiff;
+      
+      if (editData && editData.supplier_id !== selectedSupplier.supplier_id) {
+        // Fetch old supplier and revert their dues
+        const { data: oldSupplier } = await supabase.from('suppliers').select('supplier_balance').eq('supplier_id', editData.supplier_id).maybeSingle();
+        if (oldSupplier) {
+          const oldNewBalance = Number(oldSupplier.supplier_balance || 0) - oldDues;
+          await supabase.from('suppliers').update({ supplier_balance: oldNewBalance }).eq('supplier_id', editData.supplier_id);
+        }
+        // Add new dues completely to the new supplier
+        const newBalance = Number(selectedSupplier.supplier_balance || 0) + dues;
         await supabase.from('suppliers').update({ supplier_balance: newBalance }).eq('supplier_id', selectedSupplier.supplier_id);
+      } else {
+        const duesDiff = dues - oldDues;
+        if (duesDiff !== 0) {
+          const newBalance = Number(selectedSupplier.supplier_balance || 0) + duesDiff;
+          await supabase.from('suppliers').update({ supplier_balance: newBalance }).eq('supplier_id', selectedSupplier.supplier_id);
+        }
       }
 
       // Apply new stock
@@ -220,6 +235,8 @@ const CreatePurchaseForm = ({ onBack, onSuccess, editData }) => {
         const extraPayment = Number(advance) - Number(editData.advance_amount || 0);
         if (extraPayment > 0) {
           await logTransaction('Expense', extraPayment, `Additional Payment - Purchase Order ${purchaseId} (${selectedSupplier.supp_comp_name})`, payMethod);
+        } else if (extraPayment < 0) {
+          await logTransaction('Income', Math.abs(extraPayment), `Refund - Purchase Order ${purchaseId} (${selectedSupplier.supp_comp_name})`, payMethod);
         }
       } else {
         if (Number(advance) > 0) {

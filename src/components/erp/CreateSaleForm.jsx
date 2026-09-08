@@ -207,18 +207,30 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
 
       // Update customer balance based on dues difference
       const oldDues = editData ? (editData.grand_total - editData.advance_amount) : 0;
-      const duesDiff = dues - oldDues;
-
-      if (duesDiff !== 0) {
-        const newBalance = Number(selectedCustomer.customer_balance || 0) + duesDiff;
+      
+      if (editData && editData.customer_id !== selectedCustomer.customer_id) {
+        // Fetch old customer and revert their dues
+        const { data: oldCustomer } = await supabase.from('customers').select('customer_balance').eq('customer_id', editData.customer_id).maybeSingle();
+        if (oldCustomer) {
+          const oldNewBalance = Number(oldCustomer.customer_balance || 0) - oldDues;
+          await supabase.from('customers').update({ customer_balance: oldNewBalance }).eq('customer_id', editData.customer_id);
+        }
+        // Add new dues completely to the new customer
+        const newBalance = Number(selectedCustomer.customer_balance || 0) + dues;
         await supabase.from('customers').update({ customer_balance: newBalance }).eq('customer_id', selectedCustomer.customer_id);
+      } else {
+        const duesDiff = dues - oldDues;
+        if (duesDiff !== 0) {
+          const newBalance = Number(selectedCustomer.customer_balance || 0) + duesDiff;
+          await supabase.from('customers').update({ customer_balance: newBalance }).eq('customer_id', selectedCustomer.customer_id);
+        }
       }
 
       // Apply new stock (decrease stock for sales)
       for (let item of cart) {
         const { data: stockData } = await supabase.from('stock').select('*').eq('product_id', item.product_id).maybeSingle();
         if (stockData) {
-          await supabase.from('stock').update({ quantity: Math.max(0, stockData.quantity - item.quantity) }).eq('product_id', item.product_id);
+          await supabase.from('stock').update({ quantity: stockData.quantity - item.quantity }).eq('product_id', item.product_id);
         } else {
           const { data: sSeq } = await supabase.from('sequence_manager').select('*').eq('seq_name', 'STOCK_ID').maybeSingle();
           let sVal = 1; if (sSeq) sVal = (sSeq.current_val || 0) + 1;
@@ -236,6 +248,8 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
         const extraPayment = Number(advance) - Number(editData.advance_amount || 0);
         if (extraPayment > 0) {
           await logTransaction('Income', extraPayment, `Additional Payment - Sale Invoice ${saleId} (${selectedCustomer.cust_comp_name})`, payMethod);
+        } else if (extraPayment < 0) {
+          await logTransaction('Expense', Math.abs(extraPayment), `Refund - Sale Invoice ${saleId} (${selectedCustomer.cust_comp_name})`, payMethod);
         }
       } else {
         if (Number(advance) > 0) {
