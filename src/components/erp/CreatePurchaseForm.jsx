@@ -130,7 +130,6 @@ const CreatePurchaseForm = ({ onBack, onSuccess, editData }) => {
     const purchaseData = {
       purchase_id: purchaseId,
       supplier_id: selectedSupplier.supplier_id,
-      supplier_address: address,
       purchase_date: purchaseDate,
       delivery_date: deliveryDate || null,
       total_amount: subtotal,
