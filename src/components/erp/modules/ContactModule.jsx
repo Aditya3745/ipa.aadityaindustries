@@ -15,6 +15,7 @@ export const ContactModule = ({ suppliers = [], customers = [] }) => {
       name: s.vendor_name || s.name || 'Unknown Supplier',
       type: 'Supplier',
       mobile: s.phone || s.mobile || s.contact_number || '',
+      balance: s.balance || s.opening_balance || 0,
       icon: <Briefcase size={20} color="#3b82f6" />
     }));
 
@@ -23,6 +24,7 @@ export const ContactModule = ({ suppliers = [], customers = [] }) => {
       name: c.customer_name || c.name || 'Unknown Customer',
       type: 'Customer',
       mobile: c.customer_phone || c.phone || c.mobile || '',
+      balance: c.balance || c.outstanding_balance || 0,
       icon: <User size={20} color="#10b981" />
     }));
 
@@ -85,6 +87,9 @@ export const ContactModule = ({ suppliers = [], customers = [] }) => {
                       {contact.type}
                     </span>
                     <span style={{ color: '#64748b' }}>{contact.mobile || 'No number'}</span>
+                    <span style={{ color: contact.balance < 0 ? '#ef4444' : (contact.balance > 0 ? '#10b981' : '#64748b'), fontWeight: 'bold' }}>
+                      Bal: ₹{Math.abs(contact.balance || 0).toLocaleString()} {contact.balance < 0 ? '(Dr)' : (contact.balance > 0 ? '(Cr)' : '')}
+                    </span>
                   </div>
                 </div>
               </div>
