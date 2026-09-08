@@ -7,11 +7,11 @@ const CreatePurchaseForm = ({ onBack, onSuccess, editData }) => {
   const [suppliers, setSuppliers] = useState([]);
   const [products, setProducts] = useState([]);
   const [withoutGst, setWithoutGst] = useState(false);
-  
+
   // Selection States
   const [selectedSupplier, setSelectedSupplier] = useState(null);
   const [cart, setCart] = useState([]);
-  
+
   // Item Entry State
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [qty, setQty] = useState(1);
@@ -38,20 +38,20 @@ const CreatePurchaseForm = ({ onBack, onSuccess, editData }) => {
   const fetchData = async () => {
     const { data: suppData } = await supabase.from('suppliers').select('*');
     setSuppliers(suppData || []);
-    
+
     const { data: prodData } = await supabase.from('products').select('*');
     setProducts(prodData || []);
 
     if (editData) {
       const supp = suppData?.find(s => s.supplier_id === editData.supplier_id);
       if (supp) setSelectedSupplier(supp);
-      
+
       setCart(editData.purchase_items?.map(item => ({
         ...item,
         product_name: prodData?.find(p => p.product_id === item.product_id)?.product_name || item.product_id,
         tax_amount: (item.total_cost * ((item.cgst || 0) + (item.sgst || 0) + (item.igst || 0))) / 100
       })) || []);
-      
+
       setDiscount(editData.discount || 0);
       setTransport(editData.transport || 0);
       setAdvance(editData.advance_amount || 0);
@@ -68,9 +68,9 @@ const CreatePurchaseForm = ({ onBack, onSuccess, editData }) => {
   const handleAddToCart = () => {
     if (!selectedProduct) return alert('Select a product first.');
     if (qty <= 0) return alert('Quantity must be greater than 0.');
-    
+
     const baseAmount = qty * price;
-    
+
     // Tax logic based on product setup
     const cgstRate = selectedProduct.cgst || 0;
     const sgstRate = selectedProduct.sgst || 0;
@@ -81,14 +81,14 @@ const CreatePurchaseForm = ({ onBack, onSuccess, editData }) => {
     const item = {
       purchase_item_id: `PI${Date.now()}${Math.floor(Math.random() * 100)}`,
       product_id: selectedProduct.product_id,
-      product_name: selectedProduct.product_name, 
+      product_name: selectedProduct.product_name,
       quantity: qty,
       unit_cost: price,
       cgst: cgstRate,
       sgst: sgstRate,
       igst: igstRate,
       total_cost: baseAmount,
-      tax_amount: taxAmount 
+      tax_amount: taxAmount
     };
 
     setCart([...cart, item]);
@@ -114,14 +114,14 @@ const CreatePurchaseForm = ({ onBack, onSuccess, editData }) => {
     e.preventDefault();
     if (!selectedSupplier) return alert('Please select a supplier.');
     if (cart.length === 0) return alert('Cart is empty.');
-    
+
     setIsSubmitting(true);
-    
+
     let purchaseId = '';
     if (editData) {
       purchaseId = editData.purchase_id;
     } else {
-      const { data: seqData } = await supabase.from('sequence_manager').select('*').eq('seq_name', 'PURCHASE_ID').single();
+      const { data: seqData } = await supabase.from('sequence_manager').select('*').eq('seq_name', 'PURCHASE_ID').maybeSingle();
       let newSeqVal = 1; let prefix = 'AIND/PUR/';
       if (seqData) { newSeqVal = (seqData.current_val || 0) + 1; prefix = seqData.prefix || prefix; }
       purchaseId = `${prefix}${String(newSeqVal).padStart(3, '0')}`;
@@ -157,7 +157,7 @@ const CreatePurchaseForm = ({ onBack, onSuccess, editData }) => {
             await supabase.from('stock').update({ quantity: Math.max(0, stockData.quantity - oldItem.quantity) }).eq('product_id', oldItem.product_id);
           }
         }
-        
+
         await supabase.from('purchase_items').delete().eq('purchase_id', editData.purchase_id);
       } else {
         const { error: purError } = await supabase.from('purchases').insert([purchaseData]);
@@ -181,7 +181,11 @@ const CreatePurchaseForm = ({ onBack, onSuccess, editData }) => {
 
       if (!editData) {
         const newSeqVal = Number(purchaseId.split('/').pop());
-        await supabase.from('sequence_manager').update({ current_val: newSeqVal }).eq('seq_name', 'PURCHASE_ID');
+        if (seqData) {
+          await supabase.from('sequence_manager').update({ current_val: newSeqVal }).eq('seq_name', 'PURCHASE_ID');
+        } else {
+          await supabase.from('sequence_manager').insert([{ seq_name: 'PURCHASE_ID', current_val: newSeqVal, prefix: 'AIND/PUR/' }]);
+        }
       }
 
       // Update supplier balance based on dues difference
@@ -195,27 +199,27 @@ const CreatePurchaseForm = ({ onBack, onSuccess, editData }) => {
 
       // Apply new stock
       for (let item of cart) {
-         const { data: stockData } = await supabase.from('stock').select('*').eq('product_id', item.product_id).single();
-         if (stockData) {
-            await supabase.from('stock').update({ quantity: stockData.quantity + item.quantity }).eq('product_id', item.product_id);
-         } else {
-            const { data: sSeq } = await supabase.from('sequence_manager').select('*').eq('seq_name', 'STOCK_ID').single();
-            let sVal = 1; if(sSeq) sVal = (sSeq.current_val || 0)+1;
-            await supabase.from('stock').insert([{ stock_id: `AIND/STK/${String(sVal).padStart(3, '0')}`, product_id: item.product_id, quantity: item.quantity }]);
-            await supabase.from('sequence_manager').update({ current_val: sVal }).eq('seq_name', 'STOCK_ID');
-         }
+        const { data: stockData } = await supabase.from('stock').select('*').eq('product_id', item.product_id).single();
+        if (stockData) {
+          await supabase.from('stock').update({ quantity: stockData.quantity + item.quantity }).eq('product_id', item.product_id);
+        } else {
+          const { data: sSeq } = await supabase.from('sequence_manager').select('*').eq('seq_name', 'STOCK_ID').single();
+          let sVal = 1; if (sSeq) sVal = (sSeq.current_val || 0) + 1;
+          await supabase.from('stock').insert([{ stock_id: `AIND/STK/${String(sVal).padStart(3, '0')}`, product_id: item.product_id, quantity: item.quantity }]);
+          await supabase.from('sequence_manager').update({ current_val: sVal }).eq('seq_name', 'STOCK_ID');
+        }
       }
 
       // Log Transaction
       if (editData) {
-         const extraPayment = Number(advance) - Number(editData.advance_amount || 0);
-         if (extraPayment > 0) {
-            await logTransaction('Expense', extraPayment, `Additional Payment - Purchase Order ${purchaseId} (${selectedSupplier.supp_comp_name})`, payMethod);
-         }
+        const extraPayment = Number(advance) - Number(editData.advance_amount || 0);
+        if (extraPayment > 0) {
+          await logTransaction('Expense', extraPayment, `Additional Payment - Purchase Order ${purchaseId} (${selectedSupplier.supp_comp_name})`, payMethod);
+        }
       } else {
-         if (Number(advance) > 0) {
-            await logTransaction('Expense', Number(advance), `Payment - Purchase Order ${purchaseId} (${selectedSupplier.supp_comp_name})`, payMethod);
-         }
+        if (Number(advance) > 0) {
+          await logTransaction('Expense', Number(advance), `Payment - Purchase Order ${purchaseId} (${selectedSupplier.supp_comp_name})`, payMethod);
+        }
       }
 
       alert(`Purchase Order ${editData ? 'updated' : 'created'} successfully!`);
@@ -238,12 +242,12 @@ const CreatePurchaseForm = ({ onBack, onSuccess, editData }) => {
         <div>
           <h3 style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem', marginBottom: '1rem' }}>1. Supplier Details</h3>
           <label style={labelStyle}>Select Supplier</label>
-          <select 
-            style={inputStyle} 
+          <select
+            style={inputStyle}
             onChange={(e) => {
-               const supp = suppliers.find(s => s.supplier_id === e.target.value);
-               setSelectedSupplier(supp);
-               if (supp) setAddress(supp.supp_address || '');
+              const supp = suppliers.find(s => s.supplier_id === e.target.value);
+              setSelectedSupplier(supp);
+              if (supp) setAddress(supp.supp_address || '');
             }}
             value={selectedSupplier?.supplier_id || ''}
             disabled={!!editData}
@@ -256,8 +260,8 @@ const CreatePurchaseForm = ({ onBack, onSuccess, editData }) => {
 
           {selectedSupplier && (
             <div style={{ padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '4px', marginBottom: '1rem' }}>
-              <strong>{selectedSupplier.supp_comp_name}</strong><br/>
-              Phone: {selectedSupplier.supp_comp_no}<br/>
+              <strong>{selectedSupplier.supp_comp_name}</strong><br />
+              Phone: {selectedSupplier.supp_comp_no}<br />
               Balance: Rs {selectedSupplier.supplier_balance}
             </div>
           )}
@@ -284,25 +288,25 @@ const CreatePurchaseForm = ({ onBack, onSuccess, editData }) => {
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={labelStyle}>Address</label>
-              <input type="text" style={{...inputStyle, marginBottom: 0}} value={address} onChange={e => setAddress(e.target.value)} placeholder="Shipping / Billing Address..." />
+              <input type="text" style={{ ...inputStyle, marginBottom: 0 }} value={address} onChange={e => setAddress(e.target.value)} placeholder="Shipping / Billing Address..." />
             </div>
           </div>
           <div style={{ marginBottom: '1rem' }}>
-             <label style={labelStyle}>Notes / Remarks</label>
-             <textarea style={{...inputStyle, resize: 'vertical', minHeight: '80px'}} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any special instructions..."></textarea>
+            <label style={labelStyle}>Notes / Remarks</label>
+            <textarea style={{ ...inputStyle, resize: 'vertical', minHeight: '80px' }} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any special instructions..."></textarea>
           </div>
 
           <h3 style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem', marginBottom: '1rem', marginTop: '2rem' }}>3. Add Products</h3>
           <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
             <div style={{ flex: 2 }}>
               <label style={labelStyle}>Product</label>
-              <select 
+              <select
                 style={inputStyle}
                 value={selectedProduct?.product_id || ''}
                 onChange={(e) => {
                   const p = products.find(prod => prod.product_id === e.target.value);
                   setSelectedProduct(p);
-                  setPrice(p.purchase_rate || 0); 
+                  setPrice(p.purchase_rate || 0);
                 }}
               >
                 <option value="" disabled>Select...</option>
@@ -326,7 +330,7 @@ const CreatePurchaseForm = ({ onBack, onSuccess, editData }) => {
         {/* RIGHT COLUMN: Cart & Summary */}
         <div style={{ backgroundColor: '#f8fafc', padding: '1.5rem', borderRadius: '8px' }}>
           <h3 style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem', marginBottom: '1rem' }}>4. Cart & Summary</h3>
-          
+
           <div style={{ minHeight: '150px', marginBottom: '1rem' }}>
             {cart.length === 0 ? (
               <p style={{ color: '#64748b', textAlign: 'center', marginTop: '3rem' }}>Cart is empty</p>
@@ -347,7 +351,7 @@ const CreatePurchaseForm = ({ onBack, onSuccess, editData }) => {
                       <td>{item.quantity}</td>
                       <td>{item.total_cost.toFixed(2)}</td>
                       <td>
-                        <button onClick={() => removeFromCart(i)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}><Trash2 size={16}/></button>
+                        <button onClick={() => removeFromCart(i)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}><Trash2 size={16} /></button>
                       </td>
                     </tr>
                   ))}
@@ -362,7 +366,7 @@ const CreatePurchaseForm = ({ onBack, onSuccess, editData }) => {
                 <span>Subtotal</span>
                 <span>₹{subtotal.toFixed(2)}</span>
               </div>
-              
+
               {cgstTotal > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', color: '#64748b', fontSize: '0.875rem' }}>
                   <span>+ CGST</span>
@@ -387,16 +391,16 @@ const CreatePurchaseForm = ({ onBack, onSuccess, editData }) => {
                   <span>₹0.00</span>
                 </div>
               )}
-              
+
               <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', marginBottom: '0.5rem' }}>
-                 <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: '0.75rem', color: '#64748b' }}>- Discount (₹)</label>
-                    <input type="number" style={{...inputStyle, padding: '0.5rem', marginBottom: 0, backgroundColor: 'white'}} value={discount} onChange={e => setDiscount(e.target.value)} />
-                 </div>
-                 <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: '0.75rem', color: '#64748b' }}>+ Transport (₹)</label>
-                    <input type="number" style={{...inputStyle, padding: '0.5rem', marginBottom: 0, backgroundColor: 'white'}} value={transport} onChange={e => setTransport(e.target.value)} />
-                 </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '0.75rem', color: '#64748b' }}>- Discount (₹)</label>
+                  <input type="number" style={{ ...inputStyle, padding: '0.5rem', marginBottom: 0, backgroundColor: 'white' }} value={discount} onChange={e => setDiscount(e.target.value)} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '0.75rem', color: '#64748b' }}>+ Transport (₹)</label>
+                  <input type="number" style={{ ...inputStyle, padding: '0.5rem', marginBottom: 0, backgroundColor: 'white' }} value={transport} onChange={e => setTransport(e.target.value)} />
+                </div>
               </div>
 
               <div style={{ borderTop: '1px dashed #cbd5e1', marginTop: '1rem', paddingTop: '1rem', display: 'flex', justifyContent: 'space-between', fontSize: '1.25rem', color: '#0f172a', fontWeight: 'bold' }}>
@@ -411,21 +415,21 @@ const CreatePurchaseForm = ({ onBack, onSuccess, editData }) => {
             </div>
 
             <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-               <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: '0.75rem' }}>Advance Paid</label>
-                  <input type="number" style={{...inputStyle, padding: '0.5rem', marginBottom: 0}} value={advance} onChange={e => setAdvance(e.target.value)} />
-               </div>
-               <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: '0.75rem', color: '#ef4444' }}>Balance Due</label>
-                  <div style={{ padding: '0.5rem', fontWeight: 'bold', color: '#ef4444' }}>Rs {dues.toFixed(2)}</div>
-               </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: '0.75rem' }}>Advance Paid</label>
+                <input type="number" style={{ ...inputStyle, padding: '0.5rem', marginBottom: 0 }} value={advance} onChange={e => setAdvance(e.target.value)} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: '0.75rem', color: '#ef4444' }}>Balance Due</label>
+                <div style={{ padding: '0.5rem', fontWeight: 'bold', color: '#ef4444' }}>Rs {dues.toFixed(2)}</div>
+              </div>
             </div>
 
             <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-              <select style={{...inputStyle, flex: 1, padding: '0.5rem'}} value={payStatus} onChange={e => setPayStatus(e.target.value)}>
+              <select style={{ ...inputStyle, flex: 1, padding: '0.5rem' }} value={payStatus} onChange={e => setPayStatus(e.target.value)}>
                 <option>Pending</option><option>Paid</option><option>Partial</option>
               </select>
-              <select style={{...inputStyle, flex: 1, padding: '0.5rem'}} value={payMethod} onChange={e => setPayMethod(e.target.value)}>
+              <select style={{ ...inputStyle, flex: 1, padding: '0.5rem' }} value={payMethod} onChange={e => setPayMethod(e.target.value)}>
                 <option>Cash</option><option>UPI</option><option>Card</option><option>Bank Transfer</option>
               </select>
             </div>

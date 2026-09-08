@@ -7,7 +7,7 @@ import { generateIndividualInvoicePDF } from '../../utils/pdfGenerator';
 const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
-  
+
   // Selection States
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [isManualCustomer, setIsManualCustomer] = useState(false);
@@ -15,7 +15,7 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
   const [manualGst, setManualGst] = useState('');
   const [withoutGst, setWithoutGst] = useState(false);
   const [cart, setCart] = useState([]);
-  
+
   // Item Entry State
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [qty, setQty] = useState(1);
@@ -43,20 +43,20 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
   const fetchData = async () => {
     const { data: custData } = await supabase.from('customers').select('*');
     setCustomers(custData || []);
-    
+
     const { data: prodData } = await supabase.from('products').select('*');
     setProducts(prodData || []);
-    
+
     if (editData) {
       const cust = custData?.find(c => c.cust_comp_name === editData.customer_name);
       if (cust) setSelectedCustomer(cust);
-      
+
       setCart(editData.sale_items?.map(item => ({
         ...item,
         product_name: prodData?.find(p => p.product_id === item.product_id)?.product_name || item.product_id,
         tax_amount: (item.total_price * ((item.cgst || 0) + (item.sgst || 0) + (item.igst || 0))) / 100
       })) || []);
-      
+
       setDiscount(editData.discount || 0);
       setTransport(editData.transport || 0);
       setAdvance(editData.advance_amount || 0);
@@ -74,9 +74,9 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
   const handleAddToCart = () => {
     if (!selectedProduct) return alert('Select a product first.');
     if (qty <= 0) return alert('Quantity must be greater than 0.');
-    
+
     const baseAmount = qty * price;
-    
+
     // Tax logic based on product setup
     const cgstRate = selectedProduct.cgst || 0;
     const sgstRate = selectedProduct.sgst || 0;
@@ -121,9 +121,9 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
     e.preventDefault();
     if (!selectedCustomer) return alert('Please select a customer.');
     if (cart.length === 0) return alert('Cart is empty.');
-    
+
     setIsSubmitting(true);
-    
+
     // Generate Sequence ID
     let saleId = '';
     if (editData) {
@@ -163,7 +163,7 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
       if (editData) {
         const { error: saleError } = await supabase.from('sales').update(saleData).eq('sale_id', editData.sale_id);
         if (saleError) throw saleError;
-        
+
         // Delete old items and insert new
         await supabase.from('sale_items').delete().eq('sale_id', editData.sale_id);
       } else {
@@ -188,7 +188,11 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
 
       if (!editData) {
         const newSeqVal = Number(saleId.split('/').pop());
-        await supabase.from('sequence_manager').update({ current_val: newSeqVal }).eq('seq_name', 'SALE_ID');
+        if (seqData) {
+          await supabase.from('sequence_manager').update({ current_val: newSeqVal }).eq('seq_name', 'SALE_ID');
+        } else {
+          await supabase.from('sequence_manager').insert([{ seq_name: 'SALE_ID', current_val: newSeqVal, prefix: 'AIND/SALE/' }]);
+        }
       }
 
       // Update customer balance based on dues difference
@@ -202,14 +206,14 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
 
       // Log Transaction
       if (editData) {
-         const extraPayment = Number(advance) - Number(editData.advance_amount || 0);
-         if (extraPayment > 0) {
-            await logTransaction('Income', extraPayment, `Additional Payment - Sale Invoice ${saleId} (${selectedCustomer.cust_comp_name})`, payMethod);
-         }
+        const extraPayment = Number(advance) - Number(editData.advance_amount || 0);
+        if (extraPayment > 0) {
+          await logTransaction('Income', extraPayment, `Additional Payment - Sale Invoice ${saleId} (${selectedCustomer.cust_comp_name})`, payMethod);
+        }
       } else {
-         if (Number(advance) > 0) {
-            await logTransaction('Income', Number(advance), `Payment - Sale Invoice ${saleId} (${selectedCustomer.cust_comp_name})`, payMethod);
-         }
+        if (Number(advance) > 0) {
+          await logTransaction('Income', Number(advance), `Payment - Sale Invoice ${saleId} (${selectedCustomer.cust_comp_name})`, payMethod);
+        }
       }
 
       alert(`Sale ${editData ? 'updated' : 'created'} successfully!`);
@@ -260,19 +264,19 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
         <div>
           <h3 style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem', marginBottom: '1rem' }}>1. Customer Details</h3>
           <label style={labelStyle}>Select Customer</label>
-          <select 
-            style={inputStyle} 
+          <select
+            style={inputStyle}
             onChange={(e) => {
-               if (e.target.value === 'MANUAL') {
-                 setIsManualCustomer(true);
-                 setSelectedCustomer({ customer_id: 'MANUAL', cust_comp_name: 'Manual' });
-                 setAddress('');
-               } else {
-                 setIsManualCustomer(false);
-                 const cust = customers.find(c => c.customer_id === e.target.value);
-                 setSelectedCustomer(cust);
-                 if (cust) setAddress(cust.cust_address || '');
-               }
+              if (e.target.value === 'MANUAL') {
+                setIsManualCustomer(true);
+                setSelectedCustomer({ customer_id: 'MANUAL', cust_comp_name: 'Manual' });
+                setAddress('');
+              } else {
+                setIsManualCustomer(false);
+                const cust = customers.find(c => c.customer_id === e.target.value);
+                setSelectedCustomer(cust);
+                if (cust) setAddress(cust.cust_address || '');
+              }
             }}
             value={selectedCustomer?.customer_id || ''}
             disabled={!!editData}
@@ -299,8 +303,8 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
 
           {selectedCustomer && !isManualCustomer && (
             <div style={{ padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '4px', marginBottom: '1rem' }}>
-              <strong>{selectedCustomer.cust_comp_name}</strong><br/>
-              Phone: {selectedCustomer.cust_comp_person_no}<br/>
+              <strong>{selectedCustomer.cust_comp_name}</strong><br />
+              Phone: {selectedCustomer.cust_comp_person_no}<br />
               Balance: Rs {selectedCustomer.customer_balance}
             </div>
           )}
@@ -331,25 +335,25 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={labelStyle}>Address</label>
-              <input type="text" style={{...inputStyle, marginBottom: 0}} value={address} onChange={e => setAddress(e.target.value)} placeholder="Shipping / Billing Address..." />
+              <input type="text" style={{ ...inputStyle, marginBottom: 0 }} value={address} onChange={e => setAddress(e.target.value)} placeholder="Shipping / Billing Address..." />
             </div>
           </div>
           <div style={{ marginBottom: '1rem' }}>
-             <label style={labelStyle}>Notes / Remarks</label>
-             <textarea style={{...inputStyle, resize: 'vertical', minHeight: '80px'}} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any special instructions..."></textarea>
+            <label style={labelStyle}>Notes / Remarks</label>
+            <textarea style={{ ...inputStyle, resize: 'vertical', minHeight: '80px' }} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any special instructions..."></textarea>
           </div>
 
           <h3 style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem', marginBottom: '1rem', marginTop: '2rem' }}>3. Add Products</h3>
           <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
             <div style={{ flex: 2 }}>
               <label style={labelStyle}>Product</label>
-              <select 
+              <select
                 style={inputStyle}
                 value={selectedProduct?.product_id || ''}
                 onChange={(e) => {
                   const p = products.find(prod => prod.product_id === e.target.value);
                   setSelectedProduct(p);
-                  setPrice(p.selling_rate || 0); 
+                  setPrice(p.selling_rate || 0);
                 }}
               >
                 <option value="" disabled>Select...</option>
@@ -373,7 +377,7 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
         {/* RIGHT COLUMN: Cart & Summary */}
         <div style={{ backgroundColor: '#f8fafc', padding: '1.5rem', borderRadius: '8px' }}>
           <h3 style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem', marginBottom: '1rem' }}>4. Cart & Summary</h3>
-          
+
           <div style={{ minHeight: '150px', marginBottom: '1rem' }}>
             {cart.length === 0 ? (
               <p style={{ color: '#64748b', textAlign: 'center', marginTop: '3rem' }}>Cart is empty</p>
@@ -394,7 +398,7 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
                       <td>{item.quantity}</td>
                       <td>{item.total_price.toFixed(2)}</td>
                       <td>
-                        <button onClick={() => removeFromCart(i)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}><Trash2 size={16}/></button>
+                        <button onClick={() => removeFromCart(i)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}><Trash2 size={16} /></button>
                       </td>
                     </tr>
                   ))}
@@ -409,7 +413,7 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
                 <span>Subtotal</span>
                 <span>₹{subtotal.toFixed(2)}</span>
               </div>
-              
+
               {cgstTotal > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', color: '#64748b', fontSize: '0.875rem' }}>
                   <span>+ CGST</span>
@@ -434,16 +438,16 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
                   <span>₹0.00</span>
                 </div>
               )}
-              
+
               <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', marginBottom: '0.5rem' }}>
-                 <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: '0.75rem', color: '#64748b' }}>- Discount (₹)</label>
-                    <input type="number" style={{...inputStyle, padding: '0.5rem', marginBottom: 0, backgroundColor: 'white'}} value={discount} onChange={e => setDiscount(e.target.value)} />
-                 </div>
-                 <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: '0.75rem', color: '#64748b' }}>+ Transport (₹)</label>
-                    <input type="number" style={{...inputStyle, padding: '0.5rem', marginBottom: 0, backgroundColor: 'white'}} value={transport} onChange={e => setTransport(e.target.value)} />
-                 </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '0.75rem', color: '#64748b' }}>- Discount (₹)</label>
+                  <input type="number" style={{ ...inputStyle, padding: '0.5rem', marginBottom: 0, backgroundColor: 'white' }} value={discount} onChange={e => setDiscount(e.target.value)} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '0.75rem', color: '#64748b' }}>+ Transport (₹)</label>
+                  <input type="number" style={{ ...inputStyle, padding: '0.5rem', marginBottom: 0, backgroundColor: 'white' }} value={transport} onChange={e => setTransport(e.target.value)} />
+                </div>
               </div>
 
               <div style={{ borderTop: '1px dashed #cbd5e1', marginTop: '1rem', paddingTop: '1rem', display: 'flex', justifyContent: 'space-between', fontSize: '1.25rem', color: '#0f172a', fontWeight: 'bold' }}>
@@ -458,21 +462,21 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
             </div>
 
             <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-               <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: '0.75rem' }}>Advance Paid</label>
-                  <input type="number" style={{...inputStyle, padding: '0.5rem', marginBottom: 0}} value={advance} onChange={e => setAdvance(e.target.value)} />
-               </div>
-               <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: '0.75rem', color: '#ef4444' }}>Balance Due</label>
-                  <div style={{ padding: '0.5rem', fontWeight: 'bold', color: '#ef4444' }}>Rs {dues.toFixed(2)}</div>
-               </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: '0.75rem' }}>Advance Paid</label>
+                <input type="number" style={{ ...inputStyle, padding: '0.5rem', marginBottom: 0 }} value={advance} onChange={e => setAdvance(e.target.value)} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: '0.75rem', color: '#ef4444' }}>Balance Due</label>
+                <div style={{ padding: '0.5rem', fontWeight: 'bold', color: '#ef4444' }}>Rs {dues.toFixed(2)}</div>
+              </div>
             </div>
 
             <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-              <select style={{...inputStyle, flex: 1, padding: '0.5rem'}} value={payStatus} onChange={e => setPayStatus(e.target.value)}>
+              <select style={{ ...inputStyle, flex: 1, padding: '0.5rem' }} value={payStatus} onChange={e => setPayStatus(e.target.value)}>
                 <option>Pending</option><option>Paid</option><option>Partial</option>
               </select>
-              <select style={{...inputStyle, flex: 1, padding: '0.5rem'}} value={payMethod} onChange={e => setPayMethod(e.target.value)}>
+              <select style={{ ...inputStyle, flex: 1, padding: '0.5rem' }} value={payMethod} onChange={e => setPayMethod(e.target.value)}>
                 <option>Cash</option><option>UPI</option><option>Card</option><option>Bank Transfer</option>
               </select>
             </div>
