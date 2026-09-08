@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabase';
 import { Trash2, Plus, ArrowLeft } from 'lucide-react';
 import { logTransaction } from '../../utils/transactionLogger';
+import { generateIndividualInvoicePDF } from '../../utils/pdfGenerator';
 
 const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
   const [customers, setCustomers] = useState([]);
@@ -218,6 +219,34 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleGenerateQuotation = () => {
+    if (!selectedCustomer) return alert("Please select a customer for the quotation.");
+    if (cart.length === 0) return alert("Cart is empty.");
+
+    const subtotal = cart.reduce((sum, item) => sum + (Number(item.total_price) || 0), 0);
+    const taxTotal = cart.reduce((sum, item) => sum + (Number(item.tax_amount) || 0), 0);
+    const grandTotal = subtotal + taxTotal - Number(discount || 0) + Number(transport || 0);
+
+    const quoteData = {
+      id: `QT-${Date.now().toString().slice(-6)}`,
+      customer_name: isManualCustomer ? manualName : selectedCustomer.cust_comp_name,
+      customer_phone: selectedCustomer?.cust_comp_person_no || '',
+      customer_email: selectedCustomer?.cust_email || '',
+      customer_address: address,
+      customer_gst_no: isManualCustomer ? manualGst : selectedCustomer.cust_gst_no,
+      sale_date: saleDate,
+      delivery_date: deliveryDate,
+      total_amount: subtotal,
+      discount: discount,
+      tax: taxTotal,
+      transport: transport,
+      grand_total: grandTotal,
+      notes: notes
+    };
+
+    generateIndividualInvoicePDF('sale', quoteData, cart, true);
   };
 
   const inputStyle = { width: '100%', padding: '0.75rem', border: '1px solid #cbd5e1', borderRadius: '4px', marginBottom: '1rem' };
@@ -442,9 +471,16 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
               </select>
             </div>
 
-            <button onClick={handleSubmit} disabled={isSubmitting} style={{ width: '100%', padding: '1rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: isSubmitting ? 'not-allowed' : 'pointer', marginTop: '1rem', fontSize: '1.1rem' }}>
-              {isSubmitting ? 'Saving...' : (editData ? 'Update Bill & Save' : 'Generate Bill & Save')}
-            </button>
+            <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+              <button onClick={handleSubmit} disabled={isSubmitting} style={{ flex: 2, padding: '1rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: isSubmitting ? 'not-allowed' : 'pointer', fontSize: '1.1rem' }}>
+                {isSubmitting ? 'Saving...' : (editData ? 'Update Bill & Save' : 'Generate Bill & Save')}
+              </button>
+              {!editData && (
+                <button onClick={handleGenerateQuotation} style={{ flex: 1, padding: '1rem', background: '#f8fafc', color: '#475569', border: '1px solid #cbd5e1', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }}>
+                  Generate Quotation
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>

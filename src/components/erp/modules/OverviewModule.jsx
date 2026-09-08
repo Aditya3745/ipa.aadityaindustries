@@ -2,11 +2,19 @@ import React from 'react';
 import { Users, Package, ShoppingCart, ShoppingBag, ArrowRight } from 'lucide-react';
 
 export const OverviewModule = ({ data, setCurrentView }) => {
-  const { customers, products, sales, purchases, transactions } = data;
+  const { customers, products, sales, purchases, transactions, suppliers, stock } = data;
 
   const totalRevenue = sales.reduce((sum, sale) => sum + (Number(sale.grand_total) || 0), 0);
   
-  const StatCard = ({ title, value, icon: Icon, color, onClick }) => (
+  // Financial metrics
+  const totalReceivables = customers.reduce((sum, c) => sum + Math.max(0, Number(c.customer_balance || c.balance || c.outstanding_balance || 0)), 0);
+  const totalPayables = suppliers.reduce((sum, s) => sum + Math.max(0, Number(s.supplier_balance || s.balance || s.opening_balance || 0)), 0);
+  const netBalance = totalReceivables - totalPayables;
+
+  // Stock alerts
+  const lowStockItems = (stock || []).filter(item => Number(item.quantity || 0) <= Number(item.min_quantity || 0));
+
+  const StatCard = ({ title, value, icon: Icon, color, onClick, subtitle }) => (
     <div 
       style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)', cursor: onClick ? 'pointer' : 'default', transition: 'transform 0.2s', borderLeft: `4px solid ${color}` }}
       onClick={onClick}
@@ -17,6 +25,7 @@ export const OverviewModule = ({ data, setCurrentView }) => {
         <div>
           <p style={{ color: '#64748b', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.5rem', margin: 0 }}>{title}</p>
           <h3 style={{ color: '#1e293b', fontSize: '1.5rem', fontWeight: '600', margin: 0 }}>{value}</h3>
+          {subtitle && <p style={{ color: '#64748b', fontSize: '0.75rem', marginTop: '0.5rem', margin: 0 }}>{subtitle}</p>}
         </div>
         <div style={{ backgroundColor: `${color}15`, padding: '0.75rem', borderRadius: '8px' }}>
           <Icon size={24} color={color} />
@@ -31,6 +40,52 @@ export const OverviewModule = ({ data, setCurrentView }) => {
         <h2 style={{ fontSize: '1.5rem', color: '#1e293b', margin: 0 }}>Dashboard Overview</h2>
       </div>
 
+      {/* Financial Health Section */}
+      <h3 style={{ fontSize: '1.1rem', color: '#475569', marginBottom: '1rem', marginTop: 0 }}>Financial Health</h3>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
+        <StatCard 
+          title="Total Receivables (To Collect)" 
+          value={`₹${totalReceivables.toLocaleString()}`} 
+          icon={Users} 
+          color="#10b981" 
+          onClick={() => setCurrentView('contact')}
+          subtitle="Money owed by Customers"
+        />
+        <StatCard 
+          title="Total Payables (To Pay)" 
+          value={`₹${totalPayables.toLocaleString()}`} 
+          icon={ShoppingCart} 
+          color="#ef4444"
+          onClick={() => setCurrentView('contact')}
+          subtitle="Money owed to Suppliers"
+        />
+        <StatCard 
+          title="Net Cash Position" 
+          value={`₹${Math.abs(netBalance).toLocaleString()}`} 
+          icon={ShoppingBag} 
+          color={netBalance >= 0 ? "#3b82f6" : "#f59e0b"}
+          subtitle={netBalance >= 0 ? "Positive Cashflow" : "Negative Cashflow"}
+        />
+      </div>
+
+      {/* Low Stock Alerts */}
+      {lowStockItems.length > 0 && (
+        <div style={{ marginBottom: '2rem', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '12px', padding: '1.5rem' }}>
+          <h3 style={{ margin: '0 0 1rem 0', color: '#b91c1c', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Package size={20} /> Critical Low Stock Alerts
+          </h3>
+          <div style={{ display: 'grid', gap: '0.75rem' }}>
+            {lowStockItems.map((item, idx) => (
+              <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', backgroundColor: 'white', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid #fca5a5' }}>
+                <span style={{ fontWeight: '500', color: '#7f1d1d' }}>{item.products?.product_name || `Product ID: ${item.product_id}`}</span>
+                <span style={{ color: '#ef4444', fontWeight: 'bold' }}>Stock: {item.quantity} (Min: {item.min_quantity})</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <h3 style={{ fontSize: '1.1rem', color: '#475569', marginBottom: '1rem' }}>General Statistics</h3>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
         <StatCard 
           title="Total Revenue" 

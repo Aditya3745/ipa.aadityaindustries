@@ -131,8 +131,8 @@ export const generateCollectiveReportPDF = async (title, tableColumn, tableRows)
   saveOrSharePDF(doc, fileName);
 };
 
-// 2. Individual Invoice
-export const generateIndividualInvoicePDF = async (type, data, items) => {
+// 2. Individual Invoice / Quotation
+export const generateIndividualInvoicePDF = async (type, data, items, isQuotation = false) => {
   const doc = new jsPDF();
 
   // Header
@@ -153,7 +153,7 @@ export const generateIndividualInvoicePDF = async (type, data, items) => {
   // Title
   doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
-  const title = type === 'sale' ? "SALE INVOICE" : "PURCHASE NOTE";
+  const title = isQuotation ? "QUOTATION" : (type === 'sale' ? "TAX INVOICE" : "PURCHASE NOTE");
   doc.text(title, doc.internal.pageSize.getWidth() / 2, 45, { align: "center" });
 
   // Two Column Info
@@ -162,7 +162,7 @@ export const generateIndividualInvoicePDF = async (type, data, items) => {
 
   if (type === 'sale') {
     doc.setFont("helvetica", "bold");
-    doc.text("BILL TO:", 14, 55);
+    doc.text(isQuotation ? "QUOTE TO:" : "BILL TO:", 14, 55);
     doc.setFont("helvetica", "normal");
     doc.text(`Name: ${formatVal(data.customer_name)}`, 14, 60);
     doc.text(`Phone: ${formatVal(data.customer_phone)}`, 14, 65);
@@ -173,16 +173,20 @@ export const generateIndividualInvoicePDF = async (type, data, items) => {
       addr = data.customer_address.substring(0, 40);
     }
     doc.text(`Address: ${addr}`, 14, 75);
-    doc.text(`GSTIN: ${formatVal(data.customer_gst_no)}`, 14, 80);
+    if (!isQuotation) doc.text(`GSTIN: ${formatVal(data.customer_gst_no)}`, 14, 80);
 
     doc.setFont("helvetica", "bold");
-    doc.text("INVOICE DETAILS:", doc.internal.pageSize.getWidth() / 2, 55);
+    doc.text(isQuotation ? "QUOTE DETAILS:" : "INVOICE DETAILS:", doc.internal.pageSize.getWidth() / 2, 55);
     doc.setFont("helvetica", "normal");
-    doc.text(`Invoice No: ${data.id}`, doc.internal.pageSize.getWidth() / 2, 60);
-    doc.text(`Sale Date: ${data.sale_date ? data.sale_date.split('T')[0] : 'N/A'}`, doc.internal.pageSize.getWidth() / 2, 65);
-    doc.text(`Delivery Date: ${data.delivery_date ? data.delivery_date.split('T')[0] : 'N/A'}`, doc.internal.pageSize.getWidth() / 2, 70);
-    doc.text(`Payment: ${data.payment_status || 'N/A'} (${data.payment_method || 'N/A'})`, doc.internal.pageSize.getWidth() / 2, 75);
-    doc.text(`Status: ${data.order_status || 'N/A'}`, doc.internal.pageSize.getWidth() / 2, 80);
+    doc.text(`${isQuotation ? 'Ref No' : 'Invoice No'}: ${data.id || `QT-${Date.now().toString().slice(-6)}`}`, doc.internal.pageSize.getWidth() / 2, 60);
+    doc.text(`Date: ${data.sale_date ? data.sale_date.split('T')[0] : new Date().toISOString().split('T')[0]}`, doc.internal.pageSize.getWidth() / 2, 65);
+    if (!isQuotation) {
+      doc.text(`Delivery Date: ${data.delivery_date ? data.delivery_date.split('T')[0] : 'N/A'}`, doc.internal.pageSize.getWidth() / 2, 70);
+      doc.text(`Payment: ${data.payment_status || 'N/A'} (${data.payment_method || 'N/A'})`, doc.internal.pageSize.getWidth() / 2, 75);
+      doc.text(`Status: ${data.order_status || 'N/A'}`, doc.internal.pageSize.getWidth() / 2, 80);
+    } else {
+      doc.text("Valid Until: 30 Days", doc.internal.pageSize.getWidth() / 2, 70);
+    }
   } else {
     doc.setFont("helvetica", "bold");
     doc.text("SUPPLIER:", 14, 55);
