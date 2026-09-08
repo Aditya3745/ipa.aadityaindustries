@@ -206,9 +206,20 @@ export const ContactModule = ({ suppliers = [], customers = [], sales = [], purc
                       {contact.type}
                     </span>
                     <span style={{ color: '#64748b' }}>{contact.mobile || 'No number'}</span>
-                    <span style={{ color: contact.balance < 0 ? '#ef4444' : (contact.balance > 0 ? '#10b981' : '#64748b'), fontWeight: 'bold' }}>
-                      Bal: ₹{Math.abs(contact.balance || 0).toLocaleString()} {contact.balance < 0 ? '(Dr)' : (contact.balance > 0 ? '(Cr)' : '')}
-                    </span>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.25rem' }}>
+                      <span style={{ 
+                        color: contact.balance === 0 ? '#64748b' : 
+                              (contact.type === 'Customer' ? (contact.balance > 0 ? '#ef4444' : '#10b981') : (contact.balance > 0 ? '#ef4444' : '#10b981')), 
+                        fontWeight: 'bold' 
+                      }}>
+                        Bal: ₹{Math.abs(contact.balance || 0).toLocaleString()} 
+                        {contact.balance === 0 ? '' : (
+                          contact.type === 'Customer' ? 
+                            (contact.balance > 0 ? ' (Dr)' : ' (Cr)') : 
+                            (contact.balance > 0 ? ' (Cr)' : ' (Dr)')
+                        )}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
