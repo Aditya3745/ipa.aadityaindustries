@@ -126,10 +126,12 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
 
     // Generate Sequence ID
     let saleId = '';
+    let hasSeqData = false;
     if (editData) {
       saleId = editData.sale_id;
     } else {
-      const { data: seqData } = await supabase.from('sequence_manager').select('*').eq('seq_name', 'SALE_ID').single();
+      const { data: seqData } = await supabase.from('sequence_manager').select('*').eq('seq_name', 'SALE_ID').maybeSingle();
+      if (seqData) hasSeqData = true;
       let newSeqVal = 1; let prefix = 'AIND/SALE/';
       if (seqData) { newSeqVal = (seqData.current_val || 0) + 1; prefix = seqData.prefix || prefix; }
       saleId = `${prefix}${String(newSeqVal).padStart(3, '0')}`;
@@ -188,7 +190,7 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
 
       if (!editData) {
         const newSeqVal = Number(saleId.split('/').pop());
-        if (seqData) {
+        if (hasSeqData) {
           await supabase.from('sequence_manager').update({ current_val: newSeqVal }).eq('seq_name', 'SALE_ID');
         } else {
           await supabase.from('sequence_manager').insert([{ seq_name: 'SALE_ID', current_val: newSeqVal, prefix: 'AIND/SALE/' }]);

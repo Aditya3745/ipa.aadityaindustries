@@ -118,10 +118,12 @@ const CreatePurchaseForm = ({ onBack, onSuccess, editData }) => {
     setIsSubmitting(true);
 
     let purchaseId = '';
+    let hasSeqData = false;
     if (editData) {
       purchaseId = editData.purchase_id;
     } else {
       const { data: seqData } = await supabase.from('sequence_manager').select('*').eq('seq_name', 'PURCHASE_ID').maybeSingle();
+      if (seqData) hasSeqData = true;
       let newSeqVal = 1; let prefix = 'AIND/PUR/';
       if (seqData) { newSeqVal = (seqData.current_val || 0) + 1; prefix = seqData.prefix || prefix; }
       purchaseId = `${prefix}${String(newSeqVal).padStart(3, '0')}`;
@@ -180,7 +182,7 @@ const CreatePurchaseForm = ({ onBack, onSuccess, editData }) => {
 
       if (!editData) {
         const newSeqVal = Number(purchaseId.split('/').pop());
-        if (seqData) {
+        if (hasSeqData) {
           await supabase.from('sequence_manager').update({ current_val: newSeqVal }).eq('seq_name', 'PURCHASE_ID');
         } else {
           await supabase.from('sequence_manager').insert([{ seq_name: 'PURCHASE_ID', current_val: newSeqVal, prefix: 'AIND/PUR/' }]);
