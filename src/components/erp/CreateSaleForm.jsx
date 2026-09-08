@@ -392,7 +392,7 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
                     <tr key={i} style={{ borderBottom: '1px solid #e2e8f0' }}>
                       <td style={{ padding: '0.5rem 0' }}>{item.product_name}</td>
                       <td>{item.quantity}</td>
-                      <td>{(item.total_price + item.tax_amount).toFixed(2)}</td>
+                      <td>{item.total_price.toFixed(2)}</td>
                       <td>
                         <button onClick={() => removeFromCart(i)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}><Trash2 size={16}/></button>
                       </td>
