@@ -164,7 +164,7 @@ export const generateIndividualInvoicePDF = async (type, data, items = [], isQuo
   doc.setFont("helvetica", "normal");
   doc.setTextColor(71, 85, 105);
   doc.text("Devi Sthan, Lohanipur-3, Patna, Bihar - 800003", 14, 24);
-  doc.text("GSTIN: 10ENXPD2245A1ZL | Adityamohan425@gmail.com| +91-6202759310", 14, 29);
+  doc.text("GSTIN: 10ENXPD2245A1ZL | Adityamohan425@gmail.com | +91-6202759310", 14, 29);
 
   doc.setLineWidth(0.8);
   doc.setDrawColor(203, 213, 225);
@@ -179,7 +179,32 @@ export const generateIndividualInvoicePDF = async (type, data, items = [], isQuo
 
   // Two Column Info Block
   doc.setFontSize(9);
-  const formatVal = (val) => (val && String(val).trim() !== '' && val !== 'null' && val !== 'undefined') ? String(val).trim() : 'N/A';
+
+  // Helper to sanitize any string for jsPDF standard Helvetica (WinAnsiEncoding)
+  const cleanPdfText = (val) => {
+    if (!val || val === 'null' || val === 'undefined') return '';
+    return String(val)
+      // Strip Unicode directional formatting, zero-width spaces, marks
+      .replace(/[\u200B-\u200D\uFEFF\u202A-\u202E\u2060-\u206F]/g, '')
+      // Convert non-breaking spaces & other unicode spaces to regular space
+      .replace(/[\u00A0\u2000-\u200A\u202F\u205F]/g, ' ')
+      // Strip non-printable ASCII
+      .replace(/[^\x20-\x7E]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  };
+
+  const cleanPhone = (val) => {
+    if (!val || val === 'null' || val === 'undefined') return 'N/A';
+    // Remove formatting marks and keep only valid phone characters: digits, +, -, (), spaces
+    const cleaned = cleanPdfText(val).replace(/[^\d+()\- ]/g, '').replace(/\s+/g, ' ').trim();
+    return cleaned !== '' ? cleaned : 'N/A';
+  };
+
+  const formatVal = (val) => {
+    const cleaned = cleanPdfText(val);
+    return cleaned !== '' ? cleaned : 'N/A';
+  };
 
   if (type === 'sale') {
     // Bill To
@@ -189,12 +214,12 @@ export const generateIndividualInvoicePDF = async (type, data, items = [], isQuo
     doc.setFont("helvetica", "normal");
     doc.setTextColor(51, 65, 85);
     doc.text(`Name: ${formatVal(data.customer_name || data.name)}`, 14, 55);
-    doc.text(`Phone: ${formatVal(data.customer_phone || data.cust_comp_person_no || data.cust_comp_no)}`, 14, 60);
+    doc.text(`Phone: ${cleanPhone(data.customer_phone || data.cust_comp_person_no || data.cust_comp_no)}`, 14, 60);
     doc.text(`Email: ${formatVal(data.customer_email || data.cust_email)}`, 14, 65);
 
-    let rawAddr = data.customer_address || data.cust_address || '';
-    let addr = rawAddr && rawAddr !== 'null' && rawAddr !== 'undefined' ? rawAddr.substring(0, 45) : 'N/A';
-    doc.text(`Address: ${addr}`, 14, 70);
+    const rawAddr = data.customer_address || data.cust_address || '';
+    const addr = cleanPdfText(rawAddr);
+    doc.text(`Address: ${addr ? addr.substring(0, 45) : 'N/A'}`, 14, 70);
     if (!isQuotation) {
       doc.text(`GSTIN: ${formatVal(data.customer_gst_no || data.customer_gstno || data.cust_gst_no)}`, 14, 75);
     }
@@ -223,7 +248,7 @@ export const generateIndividualInvoicePDF = async (type, data, items = [], isQuo
     doc.setTextColor(51, 65, 85);
     const suppName = formatVal(data.vendor_name || data.supplier_name || data.supp_comp_name || data.supplier_id);
     doc.text(`Supplier: ${suppName}`, 14, 55);
-    doc.text(`Phone: ${formatVal(data.supplier_phone || data.supp_comp_no)}`, 14, 60);
+    doc.text(`Phone: ${cleanPhone(data.supplier_phone || data.supp_comp_no)}`, 14, 60);
     doc.text(`GSTIN: ${formatVal(data.supplier_gst_no || data.supp_gst_no)}`, 14, 65);
 
     // Purchase Order Details

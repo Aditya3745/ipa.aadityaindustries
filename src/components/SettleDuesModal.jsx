@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { IndianRupee, Calendar, CreditCard, CheckCircle2, AlertCircle } from 'lucide-react';
+import { IndianRupee, Calendar, CreditCard, CheckCircle2, AlertCircle, Sparkles, Filter } from 'lucide-react';
 import ModalWrapper from './ModalWrapper';
 import FormActions from './FormActions';
 import { inputStyle, labelStyle } from '../styles/formStyles';
@@ -17,12 +17,14 @@ export const SettleDuesModal = ({
   const [amount, setAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('Cash');
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
+  const [priorityBillId, setPriorityBillId] = useState('LIFO');
+  const [payOnlySelected, setPayOnlySelected] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
   const isSupplier = contact?.type === 'Supplier';
 
-  // Find all open invoices with pending dues for this contact (oldest first for FIFO)
+  // Find all open invoices with pending dues for this contact (newest first for LIFO)
   const pendingInvoices = useMemo(() => {
     if (!contact) return [];
     if (isSupplier) {
@@ -42,7 +44,7 @@ export const SettleDuesModal = ({
           };
         })
         .filter(inv => inv.due > 0.01)
-        .sort((a, b) => new Date(a.date) - new Date(b.date));
+        .sort((a, b) => new Date(b.date) - new Date(a.date)); // LIFO (newest first)
     } else {
       return sales
         .filter(s => s.customer_id === contact.rawId || s.customer_name === contact.name)
@@ -60,7 +62,7 @@ export const SettleDuesModal = ({
           };
         })
         .filter(inv => inv.due > 0.01)
-        .sort((a, b) => new Date(a.date) - new Date(b.date));
+        .sort((a, b) => new Date(b.date) - new Date(a.date)); // LIFO (newest first)
     }
   }, [contact, isSupplier, sales, purchases]);
 
@@ -68,11 +70,30 @@ export const SettleDuesModal = ({
     return pendingInvoices.reduce((acc, curr) => acc + curr.due, 0);
   }, [pendingInvoices]);
 
-  // FIFO settlement distribution preview
+  const selectedBill = useMemo(() => {
+    return pendingInvoices.find(inv => inv.id === priorityBillId) || null;
+  }, [pendingInvoices, priorityBillId]);
+
+  // Order invoices: priority bill first (if selected), followed by others in LIFO order
+  const orderedInvoices = useMemo(() => {
+    if (!pendingInvoices.length) return [];
+    if (priorityBillId === 'LIFO') {
+      return pendingInvoices;
+    }
+    const target = pendingInvoices.find(inv => inv.id === priorityBillId);
+    if (!target) return pendingInvoices;
+    if (payOnlySelected) {
+      return [target];
+    }
+    const others = pendingInvoices.filter(inv => inv.id !== priorityBillId);
+    return [target, ...others];
+  }, [pendingInvoices, priorityBillId, payOnlySelected]);
+
+  // Settlement distribution preview
   const distribution = useMemo(() => {
     const totalPay = Number(amount) || 0;
     let remaining = totalPay;
-    return pendingInvoices.map(inv => {
+    return orderedInvoices.map(inv => {
       const allocated = Math.min(inv.due, remaining);
       remaining = Math.max(0, remaining - allocated);
       const remainingDue = Math.max(0, inv.due - allocated);
@@ -80,10 +101,11 @@ export const SettleDuesModal = ({
         ...inv,
         allocated,
         remainingDue,
-        isFullyPaid: remainingDue <= 0.01 && allocated > 0
+        isFullyPaid: remainingDue <= 0.01 && allocated > 0,
+        isPriority: inv.id === priorityBillId
       };
     });
-  }, [pendingInvoices, amount]);
+  }, [orderedInvoices, amount, priorityBillId]);
 
   if (!isOpen || !contact) return null;
 
@@ -137,17 +159,17 @@ export const SettleDuesModal = ({
   };
 
   return (
-    <ModalWrapper title={`Settle Dues — ${contact.name}`} onClose={onClose} maxWidth="600px">
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+    <ModalWrapper title={`Settle Dues — ${contact.name}`} onClose={onClose} maxWidth="620px">
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.15rem' }}>
         {/* Contact Overview */}
-        <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '1rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+        <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '0.85rem 1rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
             <span style={{ fontSize: '0.875rem', color: '#64748b' }}>Party Type:</span>
             <span style={{ fontWeight: 600, color: isSupplier ? '#3b82f6' : '#10b981' }}>{contact.type}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '0.875rem', color: '#64748b' }}>Total Pending Across Invoices:</span>
-            <span style={{ fontWeight: 700, fontSize: '1.1rem', color: '#ef4444' }}>
+            <span style={{ fontWeight: 700, fontSize: '1.15rem', color: '#ef4444' }}>
               ₹{Number(totalOutstanding).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
             </span>
           </div>
@@ -160,19 +182,90 @@ export const SettleDuesModal = ({
           </div>
         )}
 
-        {/* Amount Input */}
+        {/* Priority / Settlement Mode Selector */}
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-            <label style={labelStyle}>Total Payment Received/Paid (₹) *</label>
-            {totalOutstanding > 0 && (
+            <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: '5px', marginBottom: 0 }}>
+              <Filter size={14} color="#3b82f6" /> Settlement Priority / Target Bill
+            </label>
+            {priorityBillId !== 'LIFO' && (
               <button
                 type="button"
-                onClick={() => setAmount(String(totalOutstanding))}
-                style={{ background: 'none', border: 'none', color: '#3b82f6', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}
+                onClick={() => { setPriorityBillId('LIFO'); setPayOnlySelected(false); }}
+                style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
               >
-                Clear All Dues (₹{totalOutstanding})
+                Reset to Auto (LIFO)
               </button>
             )}
+          </div>
+          <select
+            value={priorityBillId}
+            onChange={(e) => setPriorityBillId(e.target.value)}
+            style={{ ...inputStyle, cursor: 'pointer', backgroundColor: priorityBillId !== 'LIFO' ? '#f0f9ff' : 'white', borderColor: priorityBillId !== 'LIFO' ? '#93c5fd' : '#cbd5e1' }}
+          >
+            <option value="LIFO">Auto-Settle (LIFO — Newest Bills First)</option>
+            {pendingInvoices.length > 0 && (
+              <optgroup label="Select Specific Bill For Priority">
+                {pendingInvoices.map(inv => (
+                  <option key={inv.id} value={inv.id}>
+                    {inv.id} ({inv.date ? inv.date.split('T')[0] : '—'}) — Due: ₹{inv.due.toFixed(2)}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+          </select>
+
+          {/* Banner when a specific bill is chosen */}
+          {selectedBill && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.5rem', padding: '0.5rem 0.75rem', backgroundColor: '#eff6ff', borderRadius: '8px', border: '1px solid #bfdbfe', fontSize: '0.8rem' }}>
+              <span style={{ color: '#1e40af' }}>
+                Priority: <strong>{selectedBill.id}</strong> (Due: ₹{selectedBill.due.toFixed(2)})
+              </span>
+              <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', color: '#1e3a8a', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={payOnlySelected}
+                    onChange={(e) => setPayOnlySelected(e.target.checked)}
+                  />
+                  Only this bill
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setAmount(String(selectedBill.due))}
+                  style={{ background: '#2563eb', color: 'white', border: 'none', borderRadius: '4px', padding: '3px 9px', fontSize: '0.725rem', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  Pay Bill Due (₹{selectedBill.due.toFixed(2)})
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Amount Input */}
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem', flexWrap: 'wrap', gap: '4px' }}>
+            <label style={{ ...labelStyle, marginBottom: 0 }}>Total Payment Received/Paid (₹) *</label>
+            <div style={{ display: 'flex', gap: '0.65rem' }}>
+              {selectedBill && (
+                <button
+                  type="button"
+                  onClick={() => setAmount(String(selectedBill.due))}
+                  style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}
+                >
+                  Fill {selectedBill.id} Due (₹{selectedBill.due.toFixed(2)})
+                </button>
+              )}
+              {totalOutstanding > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setAmount(String(totalOutstanding))}
+                  style={{ background: 'none', border: 'none', color: '#10b981', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}
+                >
+                  Clear All Dues (₹{totalOutstanding.toFixed(2)})
+                </button>
+              )}
+            </div>
           </div>
           <div style={{ position: 'relative' }}>
             <IndianRupee size={16} color="#94a3b8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
@@ -223,11 +316,15 @@ export const SettleDuesModal = ({
           </div>
         </div>
 
-        {/* FIFO Allocation Preview Table */}
+        {/* Breakdown Preview Table */}
         <div>
-          <label style={{ ...labelStyle, marginBottom: '0.5rem' }}>
-            Bill Settlement Breakdown (FIFO Auto-Distribution)
-          </label>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+            <label style={{ ...labelStyle, marginBottom: 0 }}>
+              Bill Settlement Breakdown ({priorityBillId === 'LIFO' ? 'LIFO Auto-Distribution' : `Priority: ${priorityBillId}`})
+            </label>
+            <span style={{ fontSize: '0.725rem', color: '#64748b' }}>Click row to prioritize bill</span>
+          </div>
+
           {pendingInvoices.length === 0 ? (
             <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '0.5rem 0' }}>No pending invoices found for this contact.</p>
           ) : (
@@ -243,9 +340,28 @@ export const SettleDuesModal = ({
                   </tr>
                 </thead>
                 <tbody>
-                  {distribution.map((d, i) => (
-                    <tr key={d.id} style={{ borderTop: '1px solid #e2e8f0', backgroundColor: d.allocated > 0 ? '#f0fdf4' : 'white' }}>
-                      <td style={{ padding: '8px 12px', fontWeight: 600 }}>{d.id}</td>
+                  {distribution.map((d) => (
+                    <tr
+                      key={d.id}
+                      onClick={() => setPriorityBillId(d.id)}
+                      title="Click to set as priority bill"
+                      style={{
+                        borderTop: '1px solid #e2e8f0',
+                        backgroundColor: d.isPriority ? '#eff6ff' : (d.allocated > 0 ? '#f0fdf4' : 'white'),
+                        cursor: 'pointer',
+                        transition: 'background 0.15s ease'
+                      }}
+                    >
+                      <td style={{ padding: '8px 12px', fontWeight: 600 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span>{d.id}</span>
+                          {d.isPriority && (
+                            <span style={{ backgroundColor: '#3b82f6', color: 'white', fontSize: '0.65rem', padding: '1px 5px', borderRadius: '4px', fontWeight: 600 }}>
+                              Priority #1
+                            </span>
+                          )}
+                        </div>
+                      </td>
                       <td style={{ padding: '8px 12px', color: '#64748b' }}>{d.date ? d.date.split('T')[0] : '—'}</td>
                       <td style={{ padding: '8px 12px', textAlign: 'right', color: '#ef4444' }}>₹{d.due.toFixed(2)}</td>
                       <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: d.allocated > 0 ? '#10b981' : '#94a3b8' }}>
