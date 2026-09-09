@@ -10,6 +10,7 @@ export const PurchaseModule = ({
   purchases = [],
   setCurrentView,
   printPurchasesTable,
+  printSinglePurchase,
   setEditTransactionData,
   onRefresh
 }) => {
@@ -106,6 +107,14 @@ export const PurchaseModule = ({
               onEdit={() => { setEditTransactionData(p); setCurrentView('create_purchase'); }}
               action={
                 <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                  {printSinglePurchase && (
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); printSinglePurchase(p); }} 
+                      style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '4px 8px', color: '#64748b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.7rem' }}
+                    >
+                      <Printer size={12} /> Print PO
+                    </button>
+                  )}
                   {!isFullyPaid ? (
                     <button 
                       onClick={(e) => { e.stopPropagation(); handleOpenPayDue(p); }} 

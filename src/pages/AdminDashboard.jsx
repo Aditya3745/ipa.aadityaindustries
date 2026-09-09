@@ -95,7 +95,16 @@ const AdminDashboard = () => {
         case 'purchases':
           generateCollectiveReportPDF("PURCHASES REPORT", 
             ["PO Number", "Supplier", "Date", "Total Amount", "Status"],
-            purchases.map(p => [p.purchase_id, p.supplier_id || '', p.purchase_date?.split('T')[0] || '', Number(p.grand_total || 0).toFixed(2), p.status || 'Completed'])
+            purchases.map(p => {
+              const supp = suppliers.find(s => s.supplier_id === p.supplier_id || s.supp_comp_name === p.supplier_name);
+              return [
+                p.purchase_id,
+                supp ? supp.supp_comp_name : (p.supplier_name || p.supplier_id || '—'),
+                p.purchase_date?.split('T')[0] || '',
+                Number(p.grand_total || 0).toFixed(2),
+                p.payment_status || p.order_status || 'Completed'
+              ];
+            })
           );
           break;
         case 'stock':
@@ -141,6 +150,43 @@ const AdminDashboard = () => {
     });
     
     generateIndividualInvoicePDF('sale', mappedSale, mappedItems, false, linkedTxns || []);
+  };
+
+  const printSinglePurchase = async (purchase) => {
+    const supp = suppliers.find(s => s.supplier_id === purchase.supplier_id || s.supp_comp_name === purchase.supplier_name);
+    const paidAmount = Number(purchase.amount_paid !== undefined && purchase.amount_paid !== null ? purchase.amount_paid : (purchase.advance_amount || 0));
+    const dues = Math.max(0, Number(purchase.grand_total || 0) - paidAmount);
+
+    const { data: linkedTxns } = await supabase
+      .from('transactions')
+      .select('*')
+      .or(`reference_id.eq.${purchase.purchase_id},description.ilike.%${purchase.purchase_id}%`)
+      .order('payment_date', { ascending: true });
+
+    const mappedPurchase = {
+      ...purchase,
+      id: purchase.purchase_id,
+      vendor_name: supp ? supp.supp_comp_name : (purchase.supplier_name || purchase.supplier_id),
+      supplier_phone: supp?.supp_comp_no,
+      supplier_gst_no: supp?.supp_gst_no,
+      dues: dues,
+      amount_paid: paidAmount,
+      advance_amount: Number(purchase.advance_amount || 0),
+      tax_total: purchase.tax
+    };
+
+    const mappedItems = (purchase.purchase_items || []).map(item => {
+      const prod = products.find(p => p.product_id === item.product_id);
+      return {
+        ...item,
+        product_name: prod ? (prod.product_name || prod.title) : item.product_id,
+        hsn_code: prod ? prod.hsn_code : 'N/A',
+        unit_price: item.unit_cost || item.unit_price || 0,
+        total_price: item.total_cost || ((item.quantity ?? 1) * (item.unit_cost || item.unit_price || 0))
+      };
+    });
+
+    generateIndividualInvoicePDF('purchase', mappedPurchase, mappedItems, false, linkedTxns || []);
   };
 
   if (loading) {
@@ -200,6 +246,7 @@ const AdminDashboard = () => {
                 printProductsTable,
                 printSuppliersTable,
                 printPurchasesTable,
+                printSinglePurchase,
                 printStockTable,
                 setEditTransactionData,
                 onRefresh: refetchAll
@@ -247,7 +294,7 @@ const AdminDashboard = () => {
 const SecondaryAppbar = ({ title, onBack }) => (
   <div style={{ backgroundColor: '#1e293b', padding: '1rem', color: 'white', display: 'flex', alignItems: 'center' }}>
     <ArrowLeft size={24} style={{ cursor: 'pointer', marginRight: '1rem' }} onClick={onBack} />
-    <h1 style={{ fontSize: '1.2rem', margin: 0, fontWeight: '600' }}>{title}</h1>
+    <h1 style={{ fontSize: '1.25rem', margin: 0, fontWeight: '600' }}>{title}</h1>
   </div>
 );
 
@@ -263,6 +310,7 @@ const ModuleView = ({ view, data, actions }) => {
     printProductsTable,
     printSuppliersTable,
     printPurchasesTable,
+    printSinglePurchase,
     printStockTable,
     setEditTransactionData,
     onRefresh
@@ -275,7 +323,7 @@ const ModuleView = ({ view, data, actions }) => {
   if (view === 'customer') return <CustomerModule customers={customers} setModalConfig={setModalConfig} printCustomersTable={printCustomersTable} onRefresh={onRefresh} />;
   if (view === 'product') return <ProductModule products={products} setModalConfig={setModalConfig} printProductsTable={printProductsTable} onRefresh={onRefresh} />;
   if (view === 'sell') return <SellModule sales={sales} setCurrentView={setCurrentView} printSalesTable={printSalesTable} printSingleSale={printSingleSale} setEditTransactionData={setEditTransactionData} onRefresh={onRefresh} />;
-  if (view === 'purchase') return <PurchaseModule purchases={purchases} setCurrentView={setCurrentView} printPurchasesTable={printPurchasesTable} setEditTransactionData={setEditTransactionData} onRefresh={onRefresh} />;
+  if (view === 'purchase') return <PurchaseModule purchases={purchases} setCurrentView={setCurrentView} printPurchasesTable={printPurchasesTable} printSinglePurchase={printSinglePurchase} setEditTransactionData={setEditTransactionData} onRefresh={onRefresh} />;
   if (view === 'stock') return <StockModule stock={stock} printStockTable={printStockTable} onRefresh={onRefresh} />;
   if (view === 'manufacturing') return <ManufacturingModule manufacturing={manufacturing} setModalConfig={setModalConfig} onRefresh={onRefresh} />;
   if (view === 'accounts') return <AccountsModule transactions={transactions} setModalConfig={setModalConfig} onRefresh={onRefresh} />;

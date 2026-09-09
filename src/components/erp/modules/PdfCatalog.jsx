@@ -92,7 +92,8 @@ export const CatalogDocument = ({ products, logoBase64 }) => (
     <Page size="A4" style={styles.page}>
       <View style={styles.grid}>
         {products.map((product, index) => {
-          const imgUrl = (product.images && product.images.length > 0) ? product.images[0] : (product.image_url || FALLBACK_IMAGE);
+          const rawImg = (product.images && product.images.length > 0) ? product.images[0] : (product.image_url || '');
+          const imgUrl = (rawImg && !rawImg.startsWith('data:image/webp') && !rawImg.endsWith('.webp')) ? rawImg : FALLBACK_IMAGE;
           
           return (
             <View key={product.product_id || index} style={styles.card} wrap={false}>

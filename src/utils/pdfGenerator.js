@@ -3,11 +3,11 @@ import autoTable from 'jspdf-autotable';
 import { Share } from '@capacitor/share';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 
-// Helper to save or share PDF
-// Helper to save or share PDF
+// Helper to get company logo as data URL for watermarks & header
 export const getWatermarkLogo = async () => {
   try {
     const res = await fetch('/logo.png');
+    if (!res.ok) return null;
     const blob = await res.blob();
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -15,13 +15,17 @@ export const getWatermarkLogo = async () => {
       reader.readAsDataURL(blob);
     });
   } catch (e) {
-    console.error("Could not load watermark logo", e);
+    console.warn("Could not load watermark logo:", e);
     return null;
   }
 };
 
+// Helper to save or share PDF safely across Web and Native mobile (Android/iOS)
 export const saveOrSharePDF = async (doc, fileName, isReactPdfBlob = false) => {
   try {
+    // Sanitize fileName to prevent path traversal / illegal characters
+    const safeFileName = String(fileName || 'document.pdf').replace(/[\/\\?%*:|"<>]/g, '_');
+
     let pdfBase64 = null;
     if (isReactPdfBlob) {
       // doc is a Blob
@@ -37,12 +41,12 @@ export const saveOrSharePDF = async (doc, fileName, isReactPdfBlob = false) => {
 
     if (window.Capacitor && window.Capacitor.isNativePlatform()) {
       const savedFile = await Filesystem.writeFile({
-        path: fileName,
+        path: safeFileName,
         data: pdfBase64,
         directory: Directory.Cache,
       });
       await Share.share({
-        title: `Share ${fileName}`,
+        title: `Share ${safeFileName}`,
         url: savedFile.uri,
       });
     } else {
@@ -50,11 +54,11 @@ export const saveOrSharePDF = async (doc, fileName, isReactPdfBlob = false) => {
         const url = URL.createObjectURL(doc);
         const a = document.createElement('a');
         a.href = url;
-        a.download = fileName;
+        a.download = safeFileName;
         a.click();
         URL.revokeObjectURL(url);
       } else {
-        doc.save(fileName);
+        doc.save(safeFileName);
       }
     }
   } catch (error) {
@@ -67,164 +71,229 @@ export const saveOrSharePDF = async (doc, fileName, isReactPdfBlob = false) => {
 export const generateCollectiveReportPDF = async (title, tableColumn, tableRows) => {
   const doc = new jsPDF('landscape');
 
+  // Watermark
+  const logoBase64 = await getWatermarkLogo();
+  if (logoBase64) {
+    try {
+      doc.setGState(new doc.GState({ opacity: 0.10 }));
+      const w = 110;
+      const h = 110;
+      const x = (doc.internal.pageSize.getWidth() - w) / 2;
+      const y = (doc.internal.pageSize.getHeight() - h) / 2;
+      doc.addImage(logoBase64, 'PNG', x, y, w, h);
+      doc.setGState(new doc.GState({ opacity: 1.0 }));
+    } catch (e) {
+      console.warn("Watermark render skipped:", e);
+    }
+  }
+
   // Header
   doc.setFontSize(18);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(0, 51, 102);
-  doc.text("AADITYA INDUSTRIES", doc.internal.pageSize.getWidth() / 2, 20, { align: "center" });
+  doc.text("AADITYA INDUSTRIES", doc.internal.pageSize.getWidth() / 2, 18, { align: "center" });
 
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(0, 0, 0);
-  doc.text("DEVI STHAN, LOHANIPUR-3", doc.internal.pageSize.getWidth() / 2, 26, { align: "center" });
-  doc.text("GST: 10ENXPD2245A1ZL", doc.internal.pageSize.getWidth() / 2, 31, { align: "center" });
-  doc.text("info@aadityaindustries.com | +91-6202759310", doc.internal.pageSize.getWidth() / 2, 36, { align: "center" });
+  doc.text("DEVI STHAN, LOHANIPUR-3, PATNA, BIHAR", doc.internal.pageSize.getWidth() / 2, 24, { align: "center" });
+  doc.text("GSTIN: 10ENXPD2245A1ZL | info@aadityaindustries.com | +91-6202759310", doc.internal.pageSize.getWidth() / 2, 29, { align: "center" });
 
   doc.setLineWidth(0.5);
-  doc.line(14, 40, doc.internal.pageSize.getWidth() - 14, 40);
+  doc.setDrawColor(203, 213, 225);
+  doc.line(14, 33, doc.internal.pageSize.getWidth() - 14, 33);
 
   // Title
-  doc.setFontSize(12);
+  doc.setFontSize(13);
   doc.setFont("helvetica", "bold");
-  doc.text(title.toUpperCase(), doc.internal.pageSize.getWidth() / 2, 48, { align: "center" });
-
-  // Watermark
-  const logoBase64 = await getWatermarkLogo();
-  if (logoBase64) {
-    doc.setGState(new doc.GState({ opacity: 0.15 }));
-    const w = 100;
-    const h = 100;
-    const x = (doc.internal.pageSize.getWidth() - w) / 2;
-    const y = (doc.internal.pageSize.getHeight() - h) / 2;
-    doc.addImage(logoBase64, 'PNG', x, y, w, h);
-    doc.setGState(new doc.GState({ opacity: 1.0 }));
-  }
+  doc.setTextColor(15, 23, 42);
+  doc.text(String(title || 'REPORT').toUpperCase(), doc.internal.pageSize.getWidth() / 2, 41, { align: "center" });
 
   // Info Row
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
-  doc.text(`Report No: REP${Date.now().toString().slice(-6)}`, 14, 55);
-  doc.text(`Date: ${new Date().toLocaleString()}`, doc.internal.pageSize.getWidth() - 14, 55, { align: "right" });
+  doc.setTextColor(100, 116, 139);
+  doc.text(`Report Ref: REP${Date.now().toString().slice(-6)}`, 14, 47);
+  doc.text(`Generated: ${new Date().toLocaleString('en-IN')}`, doc.internal.pageSize.getWidth() - 14, 47, { align: "right" });
 
   doc.setLineWidth(0.2);
-  doc.line(14, 58, doc.internal.pageSize.getWidth() - 14, 58);
+  doc.line(14, 50, doc.internal.pageSize.getWidth() - 14, 50);
 
-  // Table
+  // Table with Page Numbering on every page
   autoTable(doc, {
     head: [tableColumn],
     body: tableRows,
-    startY: 65,
+    startY: 54,
     styles: { fontSize: 9, font: "helvetica" },
-    headStyles: { fillColor: [230, 230, 230], textColor: [0, 0, 0], fontStyle: 'bold' },
-    alternateRowStyles: { fillColor: [255, 255, 255] }
+    headStyles: { fillColor: [241, 245, 249], textColor: [15, 23, 42], fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [255, 255, 255] },
+    theme: 'grid',
+    didDrawPage: (data) => {
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "italic");
+      doc.setTextColor(148, 163, 184);
+      doc.text("Generated by Aaditya Industries ERP", 14, doc.internal.pageSize.getHeight() - 8);
+      doc.text(`Page ${data.pageNumber}`, doc.internal.pageSize.getWidth() - 14, doc.internal.pageSize.getHeight() - 8, { align: 'right' });
+    }
   });
 
-  // Footer
-  const finalY = doc.lastAutoTable.finalY || 65;
-  if (finalY < doc.internal.pageSize.getHeight() - 30) {
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "italic");
-    doc.text("Generated by AADITYA INDUSTRIES", 14, doc.internal.pageSize.getHeight() - 10);
-  }
-
-  const fileName = `${title.replace(/\s+/g, '_')}_${Date.now()}.pdf`;
+  const safeTitle = String(title || 'Report').replace(/[\/\\?%*:|"<>]/g, '_').replace(/\s+/g, '_');
+  const fileName = `${safeTitle}_${Date.now()}.pdf`;
   saveOrSharePDF(doc, fileName);
 };
 
-// 2. Individual Invoice / Quotation
-export const generateIndividualInvoicePDF = async (type, data, items, isQuotation = false, payments = []) => {
+// 2. Individual Invoice / Quotation / Purchase Note
+export const generateIndividualInvoicePDF = async (type, data, items = [], isQuotation = false, payments = []) => {
   const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
 
-  // Header
-  doc.setFontSize(18);
+  // Watermark
+  const logoBase64 = await getWatermarkLogo();
+  if (logoBase64) {
+    try {
+      doc.setGState(new doc.GState({ opacity: 0.08 }));
+      const w = 110;
+      const h = 110;
+      const x = (pageWidth - w) / 2;
+      const y = (pageHeight - h) / 2;
+      doc.addImage(logoBase64, 'PNG', x, y, w, h);
+      doc.setGState(new doc.GState({ opacity: 1.0 }));
+    } catch (e) {
+      console.warn("Watermark skipped:", e);
+    }
+  }
+
+  // Header Logo (Top Right)
+  if (logoBase64) {
+    try {
+      doc.addImage(logoBase64, 'PNG', pageWidth - 36, 12, 22, 22);
+    } catch (e) {
+      console.warn("Header logo skipped:", e);
+    }
+  }
+
+  // Company Details Header (Top Left)
+  doc.setFontSize(17);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(0, 51, 102);
-  doc.text("AADITYA INDUSTRIES", 14, 20);
+  doc.text("AADITYA INDUSTRIES", 14, 18);
 
-  doc.setFontSize(10);
+  doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(0, 0, 0);
-  doc.text("Devi Sthan, Lohanipur-3, Patna, Bihar", 14, 26);
-  doc.text("GSTIN: 10ENXPD2245A1ZL | info@aadityaindustries.com", 14, 31);
+  doc.setTextColor(71, 85, 105);
+  doc.text("Devi Sthan, Lohanipur-3, Patna, Bihar - 800003", 14, 24);
+  doc.text("GSTIN: 10ENXPD2245A1ZL | info@aadityaindustries.com | +91-6202759310", 14, 29);
 
-  doc.setLineWidth(1.2);
-  doc.line(14, 35, doc.internal.pageSize.getWidth() - 14, 35);
+  doc.setLineWidth(0.8);
+  doc.setDrawColor(203, 213, 225);
+  doc.line(14, 34, pageWidth - 14, 34);
 
   // Title
-  doc.setFontSize(14);
+  doc.setFontSize(13);
   doc.setFont("helvetica", "bold");
+  doc.setTextColor(15, 23, 42);
   const title = isQuotation ? "QUOTATION" : (type === 'sale' ? "TAX INVOICE" : "PURCHASE NOTE");
-  doc.text(title, doc.internal.pageSize.getWidth() / 2, 45, { align: "center" });
+  doc.text(title, pageWidth / 2, 42, { align: "center" });
 
-  // Two Column Info
-  doc.setFontSize(10);
-  const formatVal = (val) => (val && val !== 'null' && val !== 'undefined') ? val : 'N/A';
+  // Two Column Info Block
+  doc.setFontSize(9);
+  const formatVal = (val) => (val && String(val).trim() !== '' && val !== 'null' && val !== 'undefined') ? String(val).trim() : 'N/A';
 
   if (type === 'sale') {
+    // Bill To
     doc.setFont("helvetica", "bold");
-    doc.text(isQuotation ? "QUOTE TO:" : "BILL TO:", 14, 55);
+    doc.setTextColor(15, 23, 42);
+    doc.text(isQuotation ? "QUOTE TO:" : "BILL TO:", 14, 50);
     doc.setFont("helvetica", "normal");
-    doc.text(`Name: ${formatVal(data.customer_name)}`, 14, 60);
-    doc.text(`Phone: ${formatVal(data.customer_phone)}`, 14, 65);
-    doc.text(`Email: ${formatVal(data.customer_email)}`, 14, 70);
+    doc.setTextColor(51, 65, 85);
+    doc.text(`Name: ${formatVal(data.customer_name || data.name)}`, 14, 55);
+    doc.text(`Phone: ${formatVal(data.customer_phone || data.cust_comp_person_no || data.cust_comp_no)}`, 14, 60);
+    doc.text(`Email: ${formatVal(data.customer_email || data.cust_email)}`, 14, 65);
 
-    let addr = 'N/A';
-    if (data.customer_address && data.customer_address !== 'null' && data.customer_address !== 'undefined') {
-      addr = data.customer_address.substring(0, 40);
-    }
-    doc.text(`Address: ${addr}`, 14, 75);
-    if (!isQuotation) doc.text(`GSTIN: ${formatVal(data.customer_gst_no)}`, 14, 80);
-
-    doc.setFont("helvetica", "bold");
-    doc.text(isQuotation ? "QUOTE DETAILS:" : "INVOICE DETAILS:", doc.internal.pageSize.getWidth() / 2, 55);
-    doc.setFont("helvetica", "normal");
-    doc.text(`${isQuotation ? 'Ref No' : 'Invoice No'}: ${data.id || `QT-${Date.now().toString().slice(-6)}`}`, doc.internal.pageSize.getWidth() / 2, 60);
-    doc.text(`Date: ${data.sale_date ? data.sale_date.split('T')[0] : new Date().toISOString().split('T')[0]}`, doc.internal.pageSize.getWidth() / 2, 65);
+    let rawAddr = data.customer_address || data.cust_address || '';
+    let addr = rawAddr && rawAddr !== 'null' && rawAddr !== 'undefined' ? rawAddr.substring(0, 45) : 'N/A';
+    doc.text(`Address: ${addr}`, 14, 70);
     if (!isQuotation) {
-      doc.text(`Delivery Date: ${data.delivery_date ? data.delivery_date.split('T')[0] : 'N/A'}`, doc.internal.pageSize.getWidth() / 2, 70);
-      doc.text(`Payment: ${data.payment_status || 'N/A'} (${data.payment_method || 'N/A'})`, doc.internal.pageSize.getWidth() / 2, 75);
-      doc.text(`Status: ${data.order_status || 'N/A'}`, doc.internal.pageSize.getWidth() / 2, 80);
+      doc.text(`GSTIN: ${formatVal(data.customer_gst_no || data.customer_gstno || data.cust_gst_no)}`, 14, 75);
+    }
+
+    // Invoice Details
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(15, 23, 42);
+    doc.text(isQuotation ? "QUOTE DETAILS:" : "INVOICE DETAILS:", pageWidth / 2, 50);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(51, 65, 85);
+    doc.text(`${isQuotation ? 'Quote Ref' : 'Invoice No'}: ${data.id || data.invoice_no || `QT-${Date.now().toString().slice(-6)}`}`, pageWidth / 2, 55);
+    doc.text(`Date: ${(data.sale_date || data.created_at || new Date().toISOString()).split('T')[0]}`, pageWidth / 2, 60);
+    if (!isQuotation) {
+      doc.text(`Delivery Date: ${data.delivery_date ? data.delivery_date.split('T')[0] : 'N/A'}`, pageWidth / 2, 65);
+      doc.text(`Payment: ${data.payment_status || 'N/A'} (${data.payment_method || 'N/A'})`, pageWidth / 2, 70);
+      doc.text(`Order Status: ${data.order_status || 'Delivered'}`, pageWidth / 2, 75);
     } else {
-      doc.text("Valid Until: 30 Days", doc.internal.pageSize.getWidth() / 2, 70);
+      doc.text("Validity: 30 Days from date of issue", pageWidth / 2, 65);
     }
   } else {
+    // Supplier Block
     doc.setFont("helvetica", "bold");
-    doc.text("SUPPLIER:", 14, 55);
+    doc.setTextColor(15, 23, 42);
+    doc.text("SUPPLIER DETAILS:", 14, 50);
     doc.setFont("helvetica", "normal");
-    doc.text(`Name: ${formatVal(data.vendor_name)}`, 14, 60);
+    doc.setTextColor(51, 65, 85);
+    const suppName = formatVal(data.vendor_name || data.supplier_name || data.supp_comp_name || data.supplier_id);
+    doc.text(`Supplier: ${suppName}`, 14, 55);
+    doc.text(`Phone: ${formatVal(data.supplier_phone || data.supp_comp_no)}`, 14, 60);
+    doc.text(`GSTIN: ${formatVal(data.supplier_gst_no || data.supp_gst_no)}`, 14, 65);
 
+    // Purchase Order Details
     doc.setFont("helvetica", "bold");
-    doc.text("INVOICE DETAILS:", doc.internal.pageSize.getWidth() / 2, 55);
+    doc.setTextColor(15, 23, 42);
+    doc.text("PURCHASE ORDER DETAILS:", pageWidth / 2, 50);
     doc.setFont("helvetica", "normal");
-    doc.text(`Order ID: ${data.id}`, doc.internal.pageSize.getWidth() / 2, 60);
-    doc.text(`Date: ${data.purchase_date ? data.purchase_date.split('T')[0] : 'N/A'}`, doc.internal.pageSize.getWidth() / 2, 65);
+    doc.setTextColor(51, 65, 85);
+    doc.text(`PO Number: ${data.id || data.purchase_id}`, pageWidth / 2, 55);
+    doc.text(`Date: ${(data.purchase_date || data.created_at || new Date().toISOString()).split('T')[0]}`, pageWidth / 2, 60);
+    doc.text(`Status: ${data.payment_status || data.order_status || 'Completed'}`, pageWidth / 2, 65);
+    doc.text(`Payment Mode: ${data.payment_method || 'Cash'}`, pageWidth / 2, 70);
   }
 
   // Items Table
-  const tableColumn = ["Sl", "Product Description", "HSN", "Qty", "Rate", "Total"];
-  const tableRows = items.map((item, index) => [
-    (index + 1).toString(),
-    item.product_name,
-    item.hsn_code || "",
-    item.quantity.toString(),
-    Number(item.unit_price || 0).toFixed(2),
-    (Number(item.total_price || 0) + Number(item.tax_amount || 0)).toFixed(2)
-  ]);
+  const tableColumn = ["#", "Product Description", "HSN", "Qty", "Rate (₹)", "Total (₹)"];
+  const tableRows = (items || []).map((item, index) => {
+    const qty = Number(item.quantity ?? 1);
+    const rate = Number(item.unit_price || item.unit_cost || 0);
+    const lineTotal = Number(item.total_price || item.total_cost || (qty * rate) + Number(item.tax_amount || 0));
+    return [
+      (index + 1).toString(),
+      item.product_name || item.product_id || 'Product',
+      item.hsn_code || '—',
+      qty.toString(),
+      rate.toFixed(2),
+      lineTotal.toFixed(2)
+    ];
+  });
 
   autoTable(doc, {
     head: [tableColumn],
     body: tableRows,
-    startY: 90,
+    startY: 82,
     styles: { fontSize: 9, font: "helvetica" },
-    headStyles: { fillColor: [230, 230, 230], textColor: [0, 0, 0], fontStyle: 'bold' },
-    alternateRowStyles: { fillColor: [255, 255, 255] }
+    headStyles: { fillColor: [241, 245, 249], textColor: [15, 23, 42], fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [255, 255, 255] },
+    theme: 'grid'
   });
 
-  // Summary
-  let currentY = doc.lastAutoTable.finalY + 10;
+  // Summary Block
+  let currentY = (doc.lastAutoTable.finalY || 82) + 8;
 
-  const rightColX = doc.internal.pageSize.getWidth() - 14;
-  const labelColX = doc.internal.pageSize.getWidth() - 65;
+  // Protect against summary block spilling off page bottom
+  if (currentY > pageHeight - 65) {
+    doc.addPage();
+    currentY = 20;
+  }
+
+  const rightColX = pageWidth - 14;
+  const labelColX = pageWidth - 70;
 
   const addRow = (label, value, isBold = false) => {
     doc.setFont("helvetica", isBold ? "bold" : "normal");
@@ -233,17 +302,18 @@ export const generateIndividualInvoicePDF = async (type, data, items, isQuotatio
     currentY += 5;
   };
 
-  addRow("Sub Total:", Number(data.total_amount || 0).toFixed(2));
-  if (data.discount > 0) addRow("Discount:", `-${Number(data.discount).toFixed(2)}`);
-  if (data.tax_total > 0) addRow("Total Tax:", Number(data.tax_total).toFixed(2));
-  if (data.transport > 0) addRow("Transport:", Number(data.transport).toFixed(2));
+  doc.setFontSize(9);
+  addRow("Sub Total:", `₹${Number(data.total_amount || 0).toFixed(2)}`);
+  if (Number(data.discount || 0) > 0) addRow("Discount:", `-₹${Number(data.discount).toFixed(2)}`);
+  if (Number(data.tax_total || data.tax || 0) > 0) addRow("Tax:", `₹${Number(data.tax_total || data.tax).toFixed(2)}`);
+  if (Number(data.transport || 0) > 0) addRow("Transport:", `₹${Number(data.transport).toFixed(2)}`);
 
-  currentY += 2;
-  doc.setFontSize(12);
+  currentY += 1;
+  doc.setFontSize(11);
   doc.setTextColor(0, 51, 102);
-  addRow("Grand Total:", `Rs ${Number(data.grand_total || 0).toFixed(2)}`, true);
+  addRow("Grand Total:", `₹${Number(data.grand_total || 0).toFixed(2)}`, true);
 
-  doc.setFontSize(10);
+  doc.setFontSize(9);
   doc.setTextColor(0, 0, 0);
 
   const grandTotal = Number(data.grand_total || 0);
@@ -253,30 +323,30 @@ export const generateIndividualInvoicePDF = async (type, data, items, isQuotatio
   const isFullyPaid = due <= 0.01;
 
   if (initialAdvance > 0) {
-    currentY += 2;
-    addRow("Advance Paid:", `Rs ${initialAdvance.toFixed(2)}`);
+    currentY += 1;
+    addRow("Advance Paid:", `₹${initialAdvance.toFixed(2)}`);
   }
 
   if (totalPaid > initialAdvance) {
-    addRow("Total Amount Paid:", `Rs ${totalPaid.toFixed(2)}`);
+    addRow("Total Amount Paid:", `₹${totalPaid.toFixed(2)}`);
   }
 
   if (isFullyPaid) {
     currentY += 2;
     doc.setTextColor(16, 185, 129); // Green
-    addRow("Payment Status:", "PAYMENT DONE (CLEARED)", true);
+    addRow("Status:", "PAYMENT DONE (CLEARED)", true);
     doc.setTextColor(0, 0, 0);
   } else {
     currentY += 2;
     doc.setTextColor(239, 68, 68); // Red
-    addRow("Balance Due:", `Rs ${due.toFixed(2)}`, true);
+    addRow("Balance Due:", `₹${due.toFixed(2)}`, true);
     doc.setTextColor(0, 0, 0);
   }
 
-  // Payment History Section on Reprinted / Detailed Bills
+  // Payment Receipt Ledger on Reprinted Bills
   if (payments && payments.length > 0) {
-    currentY += 8;
-    if (currentY > doc.internal.pageSize.getHeight() - 60) {
+    currentY += 6;
+    if (currentY > pageHeight - 55) {
       doc.addPage();
       currentY = 20;
     }
@@ -286,13 +356,17 @@ export const generateIndividualInvoicePDF = async (type, data, items, isQuotatio
     doc.setTextColor(15, 23, 42);
     doc.text("PAYMENT RECEIPT HISTORY", 14, currentY);
 
-    const paymentRows = payments.map((p, idx) => [
-      (idx + 1).toString(),
-      (p.payment_date || p.transaction_date || p.created_at || '').split('T')[0],
-      p.description || `Payment against ${data.id}`,
-      p.account_type || p.payment_method || 'Cash',
-      `Rs ${Number(p.amount || 0).toFixed(2)}`
-    ]);
+    const paymentRows = payments.map((p, idx) => {
+      const isExpense = p.transaction_type === 'Expense';
+      const sign = isExpense ? '- ₹' : '₹';
+      return [
+        (idx + 1).toString(),
+        (p.payment_date || p.transaction_date || p.created_at || '').split('T')[0],
+        p.description || `Payment against ${data.id}`,
+        p.account_type || p.payment_method || 'Cash',
+        `${sign}${Number(p.amount || 0).toFixed(2)}`
+      ];
+    });
 
     autoTable(doc, {
       head: [["#", "Date", "Description", "Mode", "Amount"]],
@@ -304,29 +378,32 @@ export const generateIndividualInvoicePDF = async (type, data, items, isQuotatio
       theme: 'grid'
     });
 
-    currentY = doc.lastAutoTable.finalY + 10;
+    currentY = (doc.lastAutoTable.finalY || currentY) + 8;
   }
 
-  // Footer
-  currentY += 20;
-  if (currentY > doc.internal.pageSize.getHeight() - 30) {
+  // Terms & Conditions and Signature (Footer)
+  if (currentY > pageHeight - 45) {
     doc.addPage();
     currentY = 20;
   }
 
   doc.setFontSize(8);
   doc.setFont("helvetica", "italic");
-  doc.text("Terms & Conditions:\n1. Goods once sold will not be taken back.\n2. Warranty as per manufacturer terms.", 14, currentY);
+  doc.setTextColor(100, 116, 139);
+  doc.text("Terms & Conditions:\n1. Goods once sold will not be taken back.\n2. Warranty as per manufacturer terms.\n3. Subject to Patna Jurisdiction only.", 14, currentY);
 
   currentY += 15;
-  doc.setLineWidth(0.1);
-  doc.line(14, currentY, doc.internal.pageSize.getWidth() - 14, currentY);
+  doc.setLineWidth(0.2);
+  doc.setDrawColor(203, 213, 225);
+  doc.line(14, currentY, pageWidth - 14, currentY);
 
-  currentY += 5;
-  doc.text("Generated by Aaditya Industries", 14, currentY);
+  currentY += 6;
+  doc.text("Generated by Aaditya Industries ERP", 14, currentY);
   doc.setFont("helvetica", "bold");
-  doc.text("__________________________\nAuthorized Signatory", doc.internal.pageSize.getWidth() - 14, currentY, { align: "right" });
+  doc.setTextColor(15, 23, 42);
+  doc.text("__________________________\nAuthorized Signatory", pageWidth - 14, currentY, { align: "right" });
 
-  const fileName = `${data.id}_${Date.now()}.pdf`;
+  const safeId = String(data.id || 'Invoice').replace(/[\/\\?%*:|"<>]/g, '_');
+  const fileName = `${safeId}_${Date.now()}.pdf`;
   saveOrSharePDF(doc, fileName);
 };
