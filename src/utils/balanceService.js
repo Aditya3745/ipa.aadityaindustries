@@ -52,15 +52,21 @@ export async function updateEntityBalance(table, idCol, idVal, balCol, delta) {
 }
 
 /**
- * Convenience helper to adjust Customer outstanding balance
+ * Convenience helper to adjust Customer outstanding balance (supports customer_id or cust_comp_name)
  */
-export async function updateCustomerBalance(customerId, delta) {
-  return updateEntityBalance('customers', 'customer_id', customerId, 'customer_balance', delta);
+export async function updateCustomerBalance(customerIdOrName, delta) {
+  if (!customerIdOrName) return { success: false, error: 'Missing Customer ID or Name' };
+  const isId = String(customerIdOrName).startsWith('AIND/CUST/');
+  const col = isId ? 'customer_id' : 'cust_comp_name';
+  return updateEntityBalance('customers', col, String(customerIdOrName).trim(), 'customer_balance', delta);
 }
 
 /**
- * Convenience helper to adjust Supplier outstanding balance
+ * Convenience helper to adjust Supplier outstanding balance (supports supplier_id or supp_comp_name)
  */
-export async function updateSupplierBalance(supplierId, delta) {
-  return updateEntityBalance('suppliers', 'supplier_id', supplierId, 'supplier_balance', delta);
+export async function updateSupplierBalance(supplierIdOrName, delta) {
+  if (!supplierIdOrName) return { success: false, error: 'Missing Supplier ID or Name' };
+  const isId = String(supplierIdOrName).startsWith('AIND/SUP/');
+  const col = isId ? 'supplier_id' : 'supp_comp_name';
+  return updateEntityBalance('suppliers', col, String(supplierIdOrName).trim(), 'supplier_balance', delta);
 }

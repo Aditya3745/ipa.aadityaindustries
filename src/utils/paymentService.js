@@ -81,12 +81,13 @@ export async function recordInvoicePayment({
       return { success: false, error: invErr };
     }
 
-    // 3. Update Contact balance if partyId provided
-    if (partyId) {
+    // 3. Update Contact balance if partyId or partyName provided
+    const partyIdentifier = partyId || partyName;
+    if (partyIdentifier) {
       if (isSale) {
-        await updateCustomerBalance(partyId, -payAmt);
+        await updateCustomerBalance(partyIdentifier, -payAmt);
       } else {
-        await updateSupplierBalance(partyId, -payAmt);
+        await updateSupplierBalance(partyIdentifier, -payAmt);
       }
     }
 

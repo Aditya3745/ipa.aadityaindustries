@@ -81,7 +81,7 @@ export const ProductModule = ({ products, setModalConfig }) => {
   );
 };
 
-export const ProductModal = ({ onClose, editData }) => {
+export const ProductModal = ({ onClose, editData, onSuccess }) => {
   const [formData, setFormData] = useState(editData || { 
     product_name: '', 
     category: 'Furniture', 

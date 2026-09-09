@@ -24,7 +24,7 @@ const fetchERPData = async () => {
     supabase.from('employees').select('*').order('created_at', { ascending: false }),
     supabase.from('suppliers').select('*').order('created_at', { ascending: false }),
     supabase.from('users').select('*').order('created_at', { ascending: false }),
-    supabase.from('transactions').select('*').order('transaction_date', { ascending: false }),
+    supabase.from('transactions').select('*').order('transaction_date', { ascending: false }).order('transaction_id', { ascending: false }),
     supabase.from('report_logs').select('*').order('generated_at', { ascending: false })
   ]);
 

@@ -39,11 +39,10 @@ export const logTransaction = async (
       description: description,
       status: 'Completed',
       account_type: paymentMethod || 'Cash',
-      payment_method: paymentMethod || 'Cash',
       reference_id: referenceId ? String(referenceId) : null,
       reference_table: referenceTable ? String(referenceTable) : null,
       payment_date: txDate,
-      transaction_date: txDate
+      transaction_date: new Date().toISOString()
     };
 
     if (dues !== null && dues !== undefined && !isNaN(Number(dues))) {

@@ -11,35 +11,19 @@ import ErrorBoundary from '../components/ErrorBoundary';
 import useERPData from '../hooks/useERPData';
 
 import { OverviewModule } from '../components/erp/modules/OverviewModule';
-
-// Lazy loaded modules & modals for optimal code-splitting and fastest load times
-const SupplierModule = React.lazy(() => import('../components/erp/modules/SupplierModule').then(m => ({ default: m.SupplierModule })));
-const SupplierModal = React.lazy(() => import('../components/erp/modules/SupplierModule').then(m => ({ default: m.SupplierModal })));
-
-const EmployeeModule = React.lazy(() => import('../components/erp/modules/EmployeeModule').then(m => ({ default: m.EmployeeModule })));
-const EmployeeModal = React.lazy(() => import('../components/erp/modules/EmployeeModule').then(m => ({ default: m.EmployeeModal })));
-
-const UserModule = React.lazy(() => import('../components/erp/modules/UserModule').then(m => ({ default: m.UserModule })));
-const UserModal = React.lazy(() => import('../components/erp/modules/UserModule').then(m => ({ default: m.UserModal })));
-
-const CustomerModule = React.lazy(() => import('../components/erp/modules/CustomerModule').then(m => ({ default: m.CustomerModule })));
-const CustomerModal = React.lazy(() => import('../components/erp/modules/CustomerModule').then(m => ({ default: m.CustomerModal })));
-
-const ProductModule = React.lazy(() => import('../components/erp/modules/ProductModule').then(m => ({ default: m.ProductModule })));
-const ProductModal = React.lazy(() => import('../components/erp/modules/ProductModule').then(m => ({ default: m.ProductModal })));
-
-const ManufacturingModule = React.lazy(() => import('../components/erp/modules/ManufacturingModule').then(m => ({ default: m.ManufacturingModule })));
-const ManufacturingModal = React.lazy(() => import('../components/erp/modules/ManufacturingModule').then(m => ({ default: m.ManufacturingModal })));
-
-const AccountsModule = React.lazy(() => import('../components/erp/modules/AccountsModule').then(m => ({ default: m.AccountsModule })));
-const TransactionModal = React.lazy(() => import('../components/erp/modules/AccountsModule').then(m => ({ default: m.TransactionModal })));
-
-const SellModule = React.lazy(() => import('../components/erp/modules/SellModule').then(m => ({ default: m.SellModule })));
-const PurchaseModule = React.lazy(() => import('../components/erp/modules/PurchaseModule').then(m => ({ default: m.PurchaseModule })));
-const StockModule = React.lazy(() => import('../components/erp/modules/StockModule').then(m => ({ default: m.StockModule })));
-const ReportModule = React.lazy(() => import('../components/erp/modules/ReportModule').then(m => ({ default: m.ReportModule })));
-const AboutModule = React.lazy(() => import('../components/erp/modules/AboutModule').then(m => ({ default: m.AboutModule })));
-const ContactModule = React.lazy(() => import('../components/erp/modules/ContactModule').then(m => ({ default: m.ContactModule })));
+import { SupplierModule, SupplierModal } from '../components/erp/modules/SupplierModule';
+import { EmployeeModule, EmployeeModal } from '../components/erp/modules/EmployeeModule';
+import { UserModule, UserModal } from '../components/erp/modules/UserModule';
+import { CustomerModule, CustomerModal } from '../components/erp/modules/CustomerModule';
+import { ProductModule, ProductModal } from '../components/erp/modules/ProductModule';
+import { ManufacturingModule, ManufacturingModal } from '../components/erp/modules/ManufacturingModule';
+import { AccountsModule, TransactionModal } from '../components/erp/modules/AccountsModule';
+import { SellModule } from '../components/erp/modules/SellModule';
+import { PurchaseModule } from '../components/erp/modules/PurchaseModule';
+import { StockModule } from '../components/erp/modules/StockModule';
+import { ReportModule } from '../components/erp/modules/ReportModule';
+import { AboutModule } from '../components/erp/modules/AboutModule';
+import { ContactModule } from '../components/erp/modules/ContactModule';
 
 const AdminDashboard = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -134,7 +118,7 @@ const AdminDashboard = () => {
     const { data: linkedTxns } = await supabase
       .from('transactions')
       .select('*')
-      .eq('reference_id', sale.sale_id)
+      .or(`reference_id.eq.${sale.sale_id},description.ilike.%${sale.sale_id}%`)
       .order('payment_date', { ascending: true });
 
     const mappedSale = {
@@ -226,27 +210,29 @@ const AdminDashboard = () => {
       </div>
       
       {/* Render Extracted Modals */}
-      {modalConfig.isOpen && modalConfig.type === 'customer' && (
-        <CustomerModal onClose={() => setModalConfig({ isOpen: false, type: null })} onSuccess={refetchAll} editData={modalConfig.editData} />
-      )}
-      {modalConfig.isOpen && modalConfig.type === 'product' && (
-        <ProductModal onClose={() => setModalConfig({ isOpen: false, type: null })} onSuccess={refetchAll} editData={modalConfig.editData} />
-      )}
-      {modalConfig.isOpen && modalConfig.type === 'supplier' && (
-        <SupplierModal onClose={() => setModalConfig({ isOpen: false, type: null })} onSuccess={refetchAll} editData={modalConfig.editData} />
-      )}
-      {modalConfig.isOpen && modalConfig.type === 'employee' && (
-        <EmployeeModal onClose={() => setModalConfig({ isOpen: false, type: null })} onSuccess={refetchAll} editData={modalConfig.editData} />
-      )}
-      {modalConfig.isOpen && modalConfig.type === 'user' && (
-        <UserModal onClose={() => setModalConfig({ isOpen: false, type: null })} onSuccess={refetchAll} editData={modalConfig.editData} />
-      )}
-      {modalConfig.isOpen && modalConfig.type === 'manufacturing' && (
-        <ManufacturingModal onClose={() => setModalConfig({ isOpen: false, type: null })} onSuccess={refetchAll} products={products} employees={employees} editData={modalConfig.editData} />
-      )}
-      {modalConfig.isOpen && modalConfig.type === 'transaction' && (
-        <TransactionModal onClose={() => setModalConfig({ isOpen: false, type: null })} onSuccess={refetchAll} editData={modalConfig.editData} />
-      )}
+      <React.Suspense fallback={null}>
+        {modalConfig.isOpen && modalConfig.type === 'customer' && (
+          <CustomerModal onClose={() => setModalConfig({ isOpen: false, type: null })} onSuccess={refetchAll} editData={modalConfig.editData} />
+        )}
+        {modalConfig.isOpen && modalConfig.type === 'product' && (
+          <ProductModal onClose={() => setModalConfig({ isOpen: false, type: null })} onSuccess={refetchAll} editData={modalConfig.editData} />
+        )}
+        {modalConfig.isOpen && modalConfig.type === 'supplier' && (
+          <SupplierModal onClose={() => setModalConfig({ isOpen: false, type: null })} onSuccess={refetchAll} editData={modalConfig.editData} />
+        )}
+        {modalConfig.isOpen && modalConfig.type === 'employee' && (
+          <EmployeeModal onClose={() => setModalConfig({ isOpen: false, type: null })} onSuccess={refetchAll} editData={modalConfig.editData} />
+        )}
+        {modalConfig.isOpen && modalConfig.type === 'user' && (
+          <UserModal onClose={() => setModalConfig({ isOpen: false, type: null })} onSuccess={refetchAll} editData={modalConfig.editData} />
+        )}
+        {modalConfig.isOpen && modalConfig.type === 'manufacturing' && (
+          <ManufacturingModal onClose={() => setModalConfig({ isOpen: false, type: null })} onSuccess={refetchAll} products={products} employees={employees} editData={modalConfig.editData} />
+        )}
+        {modalConfig.isOpen && modalConfig.type === 'transaction' && (
+          <TransactionModal onClose={() => setModalConfig({ isOpen: false, type: null })} onSuccess={refetchAll} editData={modalConfig.editData} />
+        )}
+      </React.Suspense>
       
       {/* Print Format Modal */}
       {printConfig.isOpen && (

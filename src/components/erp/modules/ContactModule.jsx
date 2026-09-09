@@ -67,7 +67,8 @@ export const ContactModule = ({
         })),
         ...transactions.filter(t => 
           (t.reference_table === 'purchases' && contactPurchases.some(cp => cp.purchase_id === t.reference_id)) ||
-          t.description?.includes(selectedContact.name) ||
+          contactPurchases.some(cp => t.description?.includes(cp.purchase_id)) ||
+          (selectedContact.name && t.description?.toLowerCase().includes(selectedContact.name.toLowerCase())) ||
           t.reference_id === selectedContact.rawId
         ).map(t => ({
           date: t.payment_date || t.transaction_date || t.created_at,
@@ -89,7 +90,8 @@ export const ContactModule = ({
         })),
         ...transactions.filter(t => 
           (t.reference_table === 'sales' && contactSales.some(cs => (cs.sale_id || cs.id) === t.reference_id)) ||
-          t.description?.includes(selectedContact.name) ||
+          contactSales.some(cs => t.description?.includes(cs.sale_id || cs.id)) ||
+          (selectedContact.name && t.description?.toLowerCase().includes(selectedContact.name.toLowerCase())) ||
           t.reference_id === selectedContact.rawId
         ).map(t => ({
           date: t.payment_date || t.transaction_date || t.created_at,
