@@ -2,23 +2,53 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../../supabase';
 import { Plus, UserSquare2, Banknote } from 'lucide-react';
 import DataCard from '../../DataCard';
+import ModalWrapper from '../../ModalWrapper';
+import FormActions from '../../FormActions';
+import PaymentDialog from '../../PaymentDialog';
+import { generateId, peekNextId } from '../../../utils/sequenceManager';
 import { logTransaction } from '../../../utils/transactionLogger';
+import { cardStyle, inputStyle, labelStyle, gridStyle3 } from '../../../styles/formStyles';
+import toast from 'react-hot-toast';
 
-const cardStyle = { backgroundColor: 'white', padding: '1.5rem', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' };
+export const EmployeeModule = ({ employees = [], setModalConfig, onRefresh }) => {
+  const [selectedEmpForSalary, setSelectedEmpForSalary] = useState(null);
+  const [isPayingSalary, setIsPayingSalary] = useState(false);
 
-export const EmployeeModule = ({ employees, setModalConfig }) => {
-  const handlePaySalary = async (employee) => {
-    const defaultAmount = employee.salary || employee.employees_balance || 0;
-    const amountStr = window.prompt(`Enter salary amount to pay to ${employee.employee_name}:`, defaultAmount);
-    if (!amountStr) return;
-    const amount = Number(amountStr);
-    if (isNaN(amount) || amount <= 0) return alert("Invalid amount.");
+  const handlePaySalaryConfirm = async ({ amount, paymentMethod, paymentDate }) => {
+    if (!selectedEmpForSalary) return;
+    setIsPayingSalary(true);
+    try {
+      const emp = selectedEmpForSalary;
+      const desc = `Salary Payment - ${emp.employee_name || emp.employees_name}`;
+      
+      const success = await logTransaction(
+        'Expense',
+        amount,
+        desc,
+        paymentMethod,
+        emp.employee_id,
+        'employees',
+        paymentDate
+      );
 
-    const success = await logTransaction('Expense', amount, `Salary Payment - ${employee.employee_name}`, 'Cash');
-    if (success) {
-       const newBalance = Number(employee.employees_balance || 0) - amount;
-       await supabase.from('employees').update({ employees_balance: newBalance }).eq('employee_id', employee.employee_id);
-       alert("Salary payment recorded successfully!");
+      if (success) {
+        const newBalance = Number(emp.employees_balance || 0) - amount;
+        await supabase
+          .from('employees')
+          .update({ employees_balance: newBalance })
+          .eq('employee_id', emp.employee_id);
+
+        toast.success(`Salary payment of ₹${amount} recorded for ${emp.employee_name || emp.employees_name}!`);
+        setSelectedEmpForSalary(null);
+        if (onRefresh) onRefresh();
+      } else {
+        toast.error("Failed to log salary transaction.");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Salary payment failed: " + (err.message || ''));
+    } finally {
+      setIsPayingSalary(false);
     }
   };
 
@@ -27,41 +57,61 @@ export const EmployeeModule = ({ employees, setModalConfig }) => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Employee Directory</h2>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button onClick={() => setModalConfig({ isOpen: true, type: 'employee' })} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}><Plus size={16} /> Add</button>
+          <button
+            onClick={() => setModalConfig({ isOpen: true, type: 'employee' })}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
+          >
+            <Plus size={16} /> Add Employee
+          </button>
         </div>
       </div>
       
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.25rem' }}>
         {employees.map((e, idx) => (
           <DataCard
-            key={e.employee_id}
+            key={e.employee_id || idx}
             index={idx}
             icon={UserSquare2}
             iconColor="#8b5cf6"
-            title={e.employee_name}
+            title={e.employee_name || e.employees_name}
             subtitle={e.employee_id}
             onEdit={() => setModalConfig({ isOpen: true, type: 'employee', editData: e })}
             action={
               <button 
-                onClick={() => handlePaySalary(e)} 
-                style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '4px 8px', color: '#8b5cf6', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.7rem' }}>
+                onClick={() => setSelectedEmpForSalary(e)} 
+                style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '4px 8px', color: '#8b5cf6', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.7rem', fontWeight: 600 }}>
                  <Banknote size={12}/> Pay Salary
               </button>
             }
             details={[
-              { label: 'Phone', value: e.phone_no },
-              { label: 'Email', value: e.email },
-              { label: 'Balance', value: `Rs ${Number(e.employees_balance || 0).toFixed(2)}`, color: e.employees_balance > 0 ? '#ef4444' : '#10b981' }
+              { label: 'Designation', value: e.role || '—' },
+              { label: 'Phone', value: e.phone_no || e.phone || '—' },
+              { label: 'Base Salary', value: `₹${Number(e.salary || 0).toFixed(2)}` },
+              { label: 'Balance', value: `₹${Number(e.employees_balance || 0).toFixed(2)}`, color: e.employees_balance > 0 ? '#ef4444' : '#10b981' }
             ]}
           />
         ))}
       </div>
       {employees.length === 0 && <p style={{ padding: '1rem', color: '#64748b' }}>No employees found.</p>}
+
+      {/* Modern Salary Payment Dialog */}
+      {selectedEmpForSalary && (
+        <PaymentDialog
+          isOpen={!!selectedEmpForSalary}
+          onClose={() => setSelectedEmpForSalary(null)}
+          title={`Pay Salary — ${selectedEmpForSalary.employee_name || selectedEmpForSalary.employees_name}`}
+          invoiceId={selectedEmpForSalary.employee_id}
+          partyName={selectedEmpForSalary.employee_name || selectedEmpForSalary.employees_name}
+          dueAmount={Number(selectedEmpForSalary.employees_balance || selectedEmpForSalary.salary || 0)}
+          onConfirm={handlePaySalaryConfirm}
+          isLoading={isPayingSalary}
+        />
+      )}
     </div>
   );
 };
 
-export const EmployeeModal = ({ onClose, editData }) => {
+export const EmployeeModal = ({ onClose, editData, onSuccess }) => {
   const [formData, setFormData] = useState(editData || { 
     employees_name: '', 
     phone: '', 
@@ -78,17 +128,11 @@ export const EmployeeModal = ({ onClose, editData }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [employeeIdPreview, setEmployeeIdPreview] = useState('AIND/EMP/...');
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (editData) {
       setEmployeeIdPreview(editData.employee_id);
     } else {
-      const fetchSeq = async () => {
-        const { data } = await supabase.from('sequence_manager').select('*').eq('seq_name', 'EMP_ID').single();
-        if (data) {
-          setEmployeeIdPreview(`${data.prefix || 'AIND/EMP/'}${String((data.current_val || 0) + 1).padStart(3, '0')}`);
-        }
-      };
-      fetchSeq();
+      peekNextId('EMP_ID', 'AIND/EMP/').then(setEmployeeIdPreview);
     }
   }, [editData]);
 
@@ -97,109 +141,152 @@ export const EmployeeModal = ({ onClose, editData }) => {
     setIsSubmitting(true);
     const employeeData = { ...formData };
     delete employeeData.department; // Not in DB schema
-    if (!employeeData.hire_date) delete employeeData.hire_date; // Prevent empty string date errors
+    if (!employeeData.hire_date) delete employeeData.hire_date;
 
     try {
       if (editData) {
         const { error } = await supabase.from('employees').update(employeeData).eq('employee_id', editData.employee_id);
         if (error) throw error;
-        alert("Employee updated successfully!");
+        toast.success("Employee updated successfully!");
       } else {
-        const { data: seqData } = await supabase.from('sequence_manager').select('*').eq('seq_name', 'EMP_ID').single();
-        let newSeqVal = 1; let prefix = 'AIND/EMP/';
-        if (seqData) { newSeqVal = (seqData.current_val || 0) + 1; prefix = seqData.prefix || prefix; }
-        const employeeId = `${prefix}${String(newSeqVal).padStart(3, '0')}`;
-        
+        const employeeId = await generateId('EMP_ID', 'AIND/EMP/');
         employeeData.employee_id = employeeId;
         
         const { error } = await supabase.from('employees').insert([employeeData]);
         if (error) throw error;
-        await supabase.from('sequence_manager').update({ current_val: newSeqVal }).eq('seq_name', 'EMP_ID');
-        alert("Employee added successfully!");
+        toast.success("Employee added successfully!");
       }
+      if (onSuccess) onSuccess();
       onClose();
     } catch (err) { 
-       console.error(err); 
-       alert(`Failed to ${editData ? 'update' : 'add'} employee: ` + (err.message || JSON.stringify(err))); 
-    } finally { setIsSubmitting(false); }
+      console.error(err); 
+      toast.error(`Failed to ${editData ? 'update' : 'add'} employee: ` + (err.message || '')); 
+    } finally { 
+      setIsSubmitting(false); 
+    }
   };
 
-  const inputStyle = { width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '4px', marginBottom: '1rem', fontSize: '0.875rem' };
-  const labelStyle = { display: 'block', marginBottom: '0.25rem', fontWeight: '500', fontSize: '0.75rem', color: '#475569' };
-  const gridStyle3 = { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' };
-
   return (
-    <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
-      <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '8px', width: '100%', maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.15)' }}>
-        <h2 style={{ margin: '0 0 1.5rem 0', fontSize: '1.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem' }}>{editData ? 'Edit Employee' : 'Add Employee'}</h2>
-        <form onSubmit={handleSubmit}>
-          
-          <div style={gridStyle3}>
-            <div>
-              <label style={labelStyle}>Employee ID:</label>
-              <input type="text" style={{...inputStyle, backgroundColor: '#f1f5f9', color: '#64748b'}} value={employeeIdPreview} disabled />
-            </div>
-            <div>
-              <label style={labelStyle}>Employee Name:</label>
-              <input type="text" style={inputStyle} required value={formData.employees_name} onChange={e => setFormData({...formData, employees_name: e.target.value})} />
-            </div>
-            <div>
-              <label style={labelStyle}>Phone No:</label>
-              <input type="text" style={inputStyle} required value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
-            </div>
+    <ModalWrapper title={editData ? 'Edit Employee' : 'Add Employee'} onClose={onClose} maxWidth="850px">
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div style={gridStyle3}>
+          <div>
+            <label style={labelStyle}>Employee ID (Auto):</label>
+            <input type="text" style={{ ...inputStyle, backgroundColor: '#f8fafc', color: '#64748b' }} value={employeeIdPreview} disabled />
           </div>
+          <div>
+            <label style={labelStyle}>Employee Name *:</label>
+            <input
+              type="text"
+              style={inputStyle}
+              required
+              value={formData.employees_name || formData.employee_name || ''}
+              onChange={e => setFormData({ ...formData, employees_name: e.target.value, employee_name: e.target.value })}
+            />
+          </div>
+          <div>
+            <label style={labelStyle}>Phone No *:</label>
+            <input
+              type="text"
+              style={inputStyle}
+              required
+              value={formData.phone || formData.phone_no || ''}
+              onChange={e => setFormData({ ...formData, phone: e.target.value, phone_no: e.target.value })}
+            />
+          </div>
+        </div>
 
-          <div style={gridStyle3}>
-            <div>
-              <label style={labelStyle}>Email ID:</label>
-              <input type="email" style={inputStyle} value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
-            </div>
-            <div>
-              <label style={labelStyle}>Designation (Role):</label>
-              <input type="text" style={inputStyle} value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})} />
-            </div>
-            <div>
-              <label style={labelStyle}>Department:</label>
-              <input type="text" style={inputStyle} value={formData.department} onChange={e => setFormData({...formData, department: e.target.value})} />
-            </div>
+        <div style={gridStyle3}>
+          <div>
+            <label style={labelStyle}>Email ID:</label>
+            <input
+              type="email"
+              style={inputStyle}
+              value={formData.email || ''}
+              onChange={e => setFormData({ ...formData, email: e.target.value })}
+            />
           </div>
-          
-          <div style={gridStyle3}>
-            <div>
-              <label style={labelStyle}>Aadhar Card:</label>
-              <input type="text" style={inputStyle} value={formData.aadhar_card} onChange={e => setFormData({...formData, aadhar_card: e.target.value})} />
-            </div>
-            <div>
-              <label style={labelStyle}>PAN No:</label>
-              <input type="text" style={inputStyle} value={formData.pan_no} onChange={e => setFormData({...formData, pan_no: e.target.value})} />
-            </div>
-            <div>
-              <label style={labelStyle}>Hire Date:</label>
-              <input type="date" style={inputStyle} value={formData.hire_date} onChange={e => setFormData({...formData, hire_date: e.target.value})} />
-            </div>
+          <div>
+            <label style={labelStyle}>Designation (Role):</label>
+            <input
+              type="text"
+              style={inputStyle}
+              value={formData.role || ''}
+              onChange={e => setFormData({ ...formData, role: e.target.value })}
+            />
           </div>
+          <div>
+            <label style={labelStyle}>Hire Date:</label>
+            <input
+              type="date"
+              style={inputStyle}
+              value={formData.hire_date || ''}
+              onChange={e => setFormData({ ...formData, hire_date: e.target.value })}
+            />
+          </div>
+        </div>
+        
+        <div style={gridStyle3}>
+          <div>
+            <label style={labelStyle}>Aadhar Card No:</label>
+            <input
+              type="text"
+              style={inputStyle}
+              value={formData.aadhar_card || ''}
+              onChange={e => setFormData({ ...formData, aadhar_card: e.target.value })}
+            />
+          </div>
+          <div>
+            <label style={labelStyle}>PAN Card No:</label>
+            <input
+              type="text"
+              style={inputStyle}
+              value={formData.pan_no || ''}
+              onChange={e => setFormData({ ...formData, pan_no: e.target.value })}
+            />
+          </div>
+          <div>
+            <label style={labelStyle}>Monthly Base Salary (₹):</label>
+            <input
+              type="number"
+              step="0.01"
+              style={inputStyle}
+              value={formData.salary || 0}
+              onChange={e => setFormData({ ...formData, salary: Number(e.target.value) })}
+            />
+          </div>
+        </div>
 
-          <div style={gridStyle3}>
-            <div>
-              <label style={labelStyle}>Address:</label>
-              <input type="text" style={inputStyle} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
-            </div>
-            <div>
-              <label style={labelStyle}>Base Salary:</label>
-              <input type="number" step="0.01" style={inputStyle} value={formData.salary} onChange={e => setFormData({...formData, salary: Number(e.target.value)})} />
-            </div>
-            <div>
-              <label style={labelStyle}>Opening Balance:</label>
-              <input type="number" step="0.01" style={inputStyle} value={formData.employees_balance} onChange={e => setFormData({...formData, employees_balance: Number(e.target.value)})} />
-            </div>
+        <div style={gridStyle3}>
+          <div>
+            <label style={labelStyle}>Opening / Outstanding Balance (₹):</label>
+            <input
+              type="number"
+              step="0.01"
+              style={inputStyle}
+              value={formData.employees_balance || 0}
+              onChange={e => setFormData({ ...formData, employees_balance: Number(e.target.value) })}
+            />
           </div>
+          <div style={{ gridColumn: 'span 2' }}>
+            <label style={labelStyle}>Residential Address:</label>
+            <input
+              type="text"
+              style={inputStyle}
+              value={formData.address || ''}
+              onChange={e => setFormData({ ...formData, address: e.target.value })}
+            />
+          </div>
+        </div>
 
-          <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem', justifyContent: 'flex-end' }}>
-            <button type="button" onClick={onClose} style={{ padding: '0.75rem 2rem', background: 'white', color: '#64748b', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', fontWeight: '500' }}>Cancel</button>
-            <button type="submit" disabled={isSubmitting} style={{ padding: '0.75rem 2rem', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: isSubmitting ? 'not-allowed' : 'pointer' }}>{isSubmitting ? 'Saving...' : (editData ? 'Update Employee' : 'Save Employee')}</button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <FormActions
+          onClose={onClose}
+          isSubmitting={isSubmitting}
+          label={editData ? 'Update Employee' : 'Save Employee'}
+        />
+      </form>
+    </ModalWrapper>
   );
 };
+
+export default EmployeeModule;

@@ -3,6 +3,8 @@ import { supabase } from '../../supabase';
 import { Trash2, Plus, ArrowLeft } from 'lucide-react';
 import { logTransaction } from '../../utils/transactionLogger';
 import { generateIndividualInvoicePDF } from '../../utils/pdfGenerator';
+import { generateId } from '../../utils/sequenceManager';
+import toast from 'react-hot-toast';
 
 const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
   const [customers, setCustomers] = useState([]);
@@ -115,7 +117,10 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
   const igstTotal = withoutGst ? 0 : cart.reduce((sum, item) => sum + (item.total_price * (item.igst || 0) / 100), 0);
   const taxTotal = cgstTotal + sgstTotal + igstTotal;
   const grandTotal = subtotal + taxTotal - Number(discount) + Number(transport);
-  const dues = grandTotal - Number(advance);
+  const currentAmountPaid = editData 
+    ? (Number(editData.amount_paid || 0) + (Number(advance) - Number(editData.advance_amount || 0)))
+    : Number(advance);
+  const dues = grandTotal - currentAmountPaid;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -126,20 +131,16 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
 
     // Generate Sequence ID
     let saleId = '';
-    let hasSeqData = false;
     if (editData) {
       saleId = editData.sale_id;
     } else {
-      const { data: seqData } = await supabase.from('sequence_manager').select('*').eq('seq_name', 'SALE_ID').maybeSingle();
-      if (seqData) hasSeqData = true;
-      let newSeqVal = 1; let prefix = 'AIND/SALE/';
-      if (seqData) { newSeqVal = (seqData.current_val || 0) + 1; prefix = seqData.prefix || prefix; }
-      saleId = `${prefix}${String(newSeqVal).padStart(3, '0')}`;
+      saleId = await generateId('SALE_ID', 'AIND/SALE/');
     }
 
     const saleData = {
       sale_id: saleId,
       invoice_no: invoiceNo || saleId,
+      customer_id: isManualCustomer ? null : selectedCustomer.customer_id,
       customer_name: isManualCustomer ? manualName : selectedCustomer.cust_comp_name,
       customer_phone: isManualCustomer ? '' : selectedCustomer.cust_comp_person_no,
       customer_email: isManualCustomer ? '' : selectedCustomer.cust_email,
@@ -158,6 +159,7 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
       payment_status: payStatus,
       payment_method: payMethod,
       order_status: orderStatus,
+      amount_paid: currentAmountPaid,
       notes
     };
 
@@ -196,24 +198,27 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
       const { error: itemsError } = await supabase.from('sale_items').insert(itemsToInsert);
       if (itemsError) throw itemsError;
 
-      if (!editData) {
-        const newSeqVal = Number(saleId.split('/').pop());
-        if (hasSeqData) {
-          await supabase.from('sequence_manager').update({ current_val: newSeqVal }).eq('seq_name', 'SALE_ID');
-        } else {
-          await supabase.from('sequence_manager').insert([{ seq_name: 'SALE_ID', current_val: newSeqVal, prefix: 'AIND/SALE/' }]);
-        }
-      }
+
 
       // Update customer balance based on dues difference
-      const oldDues = editData ? (editData.grand_total - editData.advance_amount) : 0;
+      const oldDues = editData ? (editData.grand_total - (editData.amount_paid || editData.advance_amount || 0)) : 0;
       
-      if (editData && editData.customer_id !== selectedCustomer.customer_id) {
+      if (editData && (editData.customer_id !== selectedCustomer.customer_id && editData.customer_name !== selectedCustomer.cust_comp_name)) {
         // Fetch old customer and revert their dues
-        const { data: oldCustomer } = await supabase.from('customers').select('customer_balance').eq('customer_id', editData.customer_id).maybeSingle();
+        let oldCustomerQuery = supabase.from('customers').select('customer_balance');
+        if (editData.customer_id) {
+          oldCustomerQuery = oldCustomerQuery.eq('customer_id', editData.customer_id);
+        } else {
+          oldCustomerQuery = oldCustomerQuery.eq('cust_comp_name', editData.customer_name);
+        }
+        const { data: oldCustomer } = await oldCustomerQuery.maybeSingle();
         if (oldCustomer) {
           const oldNewBalance = Number(oldCustomer.customer_balance || 0) - oldDues;
-          await supabase.from('customers').update({ customer_balance: oldNewBalance }).eq('customer_id', editData.customer_id);
+          if (editData.customer_id) {
+            await supabase.from('customers').update({ customer_balance: oldNewBalance }).eq('customer_id', editData.customer_id);
+          } else {
+            await supabase.from('customers').update({ customer_balance: oldNewBalance }).eq('cust_comp_name', editData.customer_name);
+          }
         }
         // Add new dues completely to the new customer
         const newBalance = Number(selectedCustomer.customer_balance || 0) + dues;
@@ -232,36 +237,31 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
         if (stockData) {
           await supabase.from('stock').update({ quantity: stockData.quantity - item.quantity }).eq('product_id', item.product_id);
         } else {
-          const { data: sSeq } = await supabase.from('sequence_manager').select('*').eq('seq_name', 'STOCK_ID').maybeSingle();
-          let sVal = 1; if (sSeq) sVal = (sSeq.current_val || 0) + 1;
-          await supabase.from('stock').insert([{ stock_id: `AIND/STK/${String(sVal).padStart(3, '0')}`, product_id: item.product_id, quantity: 0, location: 'Main Warehouse', min_quantity: 0 }]);
-          if (sSeq) {
-             await supabase.from('sequence_manager').update({ current_val: sVal }).eq('seq_name', 'STOCK_ID');
-          } else {
-             await supabase.from('sequence_manager').insert([{ seq_name: 'STOCK_ID', current_val: sVal, prefix: 'AIND/STK/' }]);
-          }
+          const newStockId = await generateId('STOCK_ID', 'AIND/STK/');
+          await supabase.from('stock').insert([{ stock_id: newStockId, product_id: item.product_id, quantity: 0, location: 'Main Warehouse', min_quantity: 0 }]);
         }
       }
 
-      // Log Transaction
+      // Log Transaction with reference tracking
+      const partyName = isManualCustomer ? manualName : (selectedCustomer?.cust_comp_name || '');
       if (editData) {
         const extraPayment = Number(advance) - Number(editData.advance_amount || 0);
         if (extraPayment > 0) {
-          await logTransaction('Income', extraPayment, `Additional Payment - Sale Invoice ${saleId} (${selectedCustomer.cust_comp_name})`, payMethod);
+          await logTransaction('Income', extraPayment, `Additional Payment - Sale Invoice ${saleId} (${partyName})`, payMethod, saleId, 'sales', saleDate, dues);
         } else if (extraPayment < 0) {
-          await logTransaction('Expense', Math.abs(extraPayment), `Refund - Sale Invoice ${saleId} (${selectedCustomer.cust_comp_name})`, payMethod);
+          await logTransaction('Expense', Math.abs(extraPayment), `Refund - Sale Invoice ${saleId} (${partyName})`, payMethod, saleId, 'sales', saleDate, dues);
         }
       } else {
         if (Number(advance) > 0) {
-          await logTransaction('Income', Number(advance), `Payment - Sale Invoice ${saleId} (${selectedCustomer.cust_comp_name})`, payMethod);
+          await logTransaction('Income', Number(advance), `Advance Payment - Sale Invoice ${saleId} (${partyName})`, payMethod, saleId, 'sales', saleDate, dues);
         }
       }
 
-      alert(`Sale ${editData ? 'updated' : 'created'} successfully!`);
+      toast.success(`Sale ${editData ? 'updated' : 'created'} successfully!`);
       onSuccess();
     } catch (error) {
       console.error(error);
-      alert(`Error ${editData ? 'updating' : 'creating'} sale.`);
+      toast.error(`Error ${editData ? 'updating' : 'creating'} sale.`);
     } finally {
       setIsSubmitting(false);
     }

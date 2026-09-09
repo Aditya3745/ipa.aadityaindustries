@@ -132,7 +132,7 @@ export const generateCollectiveReportPDF = async (title, tableColumn, tableRows)
 };
 
 // 2. Individual Invoice / Quotation
-export const generateIndividualInvoicePDF = async (type, data, items, isQuotation = false) => {
+export const generateIndividualInvoicePDF = async (type, data, items, isQuotation = false, payments = []) => {
   const doc = new jsPDF();
 
   // Header
@@ -245,12 +245,66 @@ export const generateIndividualInvoicePDF = async (type, data, items, isQuotatio
 
   doc.setFontSize(10);
   doc.setTextColor(0, 0, 0);
-  if (data.advance_amount > 0) {
-    currentY += 3;
-    addRow("Advance Paid:", Number(data.advance_amount).toFixed(2));
-    doc.setTextColor(255, 0, 0);
-    addRow("Balance Due:", `Rs ${Number(data.dues || 0).toFixed(2)}`, true);
+
+  const grandTotal = Number(data.grand_total || 0);
+  const initialAdvance = Number(data.advance_amount || 0);
+  const totalPaid = Number(data.amount_paid !== undefined && data.amount_paid !== null ? data.amount_paid : initialAdvance);
+  const due = Math.max(0, Number(data.dues !== undefined ? data.dues : (grandTotal - totalPaid)));
+  const isFullyPaid = due <= 0.01;
+
+  if (initialAdvance > 0) {
+    currentY += 2;
+    addRow("Advance Paid:", `Rs ${initialAdvance.toFixed(2)}`);
+  }
+
+  if (totalPaid > initialAdvance) {
+    addRow("Total Amount Paid:", `Rs ${totalPaid.toFixed(2)}`);
+  }
+
+  if (isFullyPaid) {
+    currentY += 2;
+    doc.setTextColor(16, 185, 129); // Green
+    addRow("Payment Status:", "PAYMENT DONE (CLEARED)", true);
     doc.setTextColor(0, 0, 0);
+  } else {
+    currentY += 2;
+    doc.setTextColor(239, 68, 68); // Red
+    addRow("Balance Due:", `Rs ${due.toFixed(2)}`, true);
+    doc.setTextColor(0, 0, 0);
+  }
+
+  // Payment History Section on Reprinted / Detailed Bills
+  if (payments && payments.length > 0) {
+    currentY += 8;
+    if (currentY > doc.internal.pageSize.getHeight() - 60) {
+      doc.addPage();
+      currentY = 20;
+    }
+
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(15, 23, 42);
+    doc.text("PAYMENT RECEIPT HISTORY", 14, currentY);
+
+    const paymentRows = payments.map((p, idx) => [
+      (idx + 1).toString(),
+      (p.payment_date || p.transaction_date || p.created_at || '').split('T')[0],
+      p.description || `Payment against ${data.id}`,
+      p.account_type || p.payment_method || 'Cash',
+      `Rs ${Number(p.amount || 0).toFixed(2)}`
+    ]);
+
+    autoTable(doc, {
+      head: [["#", "Date", "Description", "Mode", "Amount"]],
+      body: paymentRows,
+      startY: currentY + 3,
+      styles: { fontSize: 8, font: "helvetica" },
+      headStyles: { fillColor: [241, 245, 249], textColor: [71, 85, 105], fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [255, 255, 255] },
+      theme: 'grid'
+    });
+
+    currentY = doc.lastAutoTable.finalY + 10;
   }
 
   // Footer

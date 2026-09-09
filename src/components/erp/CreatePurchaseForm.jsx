@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabase';
 import { Trash2, Plus } from 'lucide-react';
 import { logTransaction } from '../../utils/transactionLogger';
+import { generateId } from '../../utils/sequenceManager';
+import toast from 'react-hot-toast';
 
 const CreatePurchaseForm = ({ onBack, onSuccess, editData }) => {
   const [suppliers, setSuppliers] = useState([]);
@@ -108,7 +110,10 @@ const CreatePurchaseForm = ({ onBack, onSuccess, editData }) => {
   const igstTotal = withoutGst ? 0 : cart.reduce((sum, item) => sum + (item.total_cost * (item.igst || 0) / 100), 0);
   const taxTotal = cgstTotal + sgstTotal + igstTotal;
   const grandTotal = subtotal + taxTotal - Number(discount) + Number(transport);
-  const dues = grandTotal - Number(advance);
+  const currentAmountPaid = editData 
+    ? (Number(editData.amount_paid || 0) + (Number(advance) - Number(editData.advance_amount || 0)))
+    : Number(advance);
+  const dues = grandTotal - currentAmountPaid;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -118,15 +123,10 @@ const CreatePurchaseForm = ({ onBack, onSuccess, editData }) => {
     setIsSubmitting(true);
 
     let purchaseId = '';
-    let hasSeqData = false;
     if (editData) {
       purchaseId = editData.purchase_id;
     } else {
-      const { data: seqData } = await supabase.from('sequence_manager').select('*').eq('seq_name', 'PURCHASE_ID').maybeSingle();
-      if (seqData) hasSeqData = true;
-      let newSeqVal = 1; let prefix = 'AIND/PUR/';
-      if (seqData) { newSeqVal = (seqData.current_val || 0) + 1; prefix = seqData.prefix || prefix; }
-      purchaseId = `${prefix}${String(newSeqVal).padStart(3, '0')}`;
+      purchaseId = await generateId('PURCHASE_ID', 'AIND/PUR/');
     }
 
     const purchaseData = {
@@ -146,6 +146,7 @@ const CreatePurchaseForm = ({ onBack, onSuccess, editData }) => {
       payment_status: payStatus,
       payment_method: payMethod,
       order_status: orderStatus,
+      amount_paid: currentAmountPaid,
       notes
     };
 
@@ -183,17 +184,10 @@ const CreatePurchaseForm = ({ onBack, onSuccess, editData }) => {
       const { error: itemsError } = await supabase.from('purchase_items').insert(itemsData);
       if (itemsError) throw itemsError;
 
-      if (!editData) {
-        const newSeqVal = Number(purchaseId.split('/').pop());
-        if (hasSeqData) {
-          await supabase.from('sequence_manager').update({ current_val: newSeqVal }).eq('seq_name', 'PURCHASE_ID');
-        } else {
-          await supabase.from('sequence_manager').insert([{ seq_name: 'PURCHASE_ID', current_val: newSeqVal, prefix: 'AIND/PUR/' }]);
-        }
-      }
 
-      // Update supplier balance based on dues difference
-      const oldDues = editData ? (editData.grand_total - editData.advance_amount) : 0;
+
+      // Update supplier balance
+      const oldDues = editData ? (editData.grand_total - (editData.amount_paid || editData.advance_amount || 0)) : 0;
       
       if (editData && editData.supplier_id !== selectedSupplier.supplier_id) {
         // Fetch old supplier and revert their dues
@@ -219,36 +213,31 @@ const CreatePurchaseForm = ({ onBack, onSuccess, editData }) => {
         if (stockData) {
           await supabase.from('stock').update({ quantity: stockData.quantity + item.quantity }).eq('product_id', item.product_id);
         } else {
-          const { data: sSeq } = await supabase.from('sequence_manager').select('*').eq('seq_name', 'STOCK_ID').maybeSingle();
-          let sVal = 1; if (sSeq) sVal = (sSeq.current_val || 0) + 1;
-          await supabase.from('stock').insert([{ stock_id: `AIND/STK/${String(sVal).padStart(3, '0')}`, product_id: item.product_id, quantity: item.quantity, location: 'Main Warehouse', min_quantity: 0 }]);
-          if (sSeq) {
-             await supabase.from('sequence_manager').update({ current_val: sVal }).eq('seq_name', 'STOCK_ID');
-          } else {
-             await supabase.from('sequence_manager').insert([{ seq_name: 'STOCK_ID', current_val: sVal, prefix: 'AIND/STK/' }]);
-          }
+          const newStockId = await generateId('STOCK_ID', 'AIND/STK/');
+          await supabase.from('stock').insert([{ stock_id: newStockId, product_id: item.product_id, quantity: item.quantity, location: 'Main Warehouse', min_quantity: 0 }]);
         }
       }
 
-      // Log Transaction
+      // Log Transaction with reference linking
+      const partyName = selectedSupplier?.supp_comp_name || '';
       if (editData) {
         const extraPayment = Number(advance) - Number(editData.advance_amount || 0);
         if (extraPayment > 0) {
-          await logTransaction('Expense', extraPayment, `Additional Payment - Purchase Order ${purchaseId} (${selectedSupplier.supp_comp_name})`, payMethod);
+          await logTransaction('Expense', extraPayment, `Additional Payment - Purchase Order ${purchaseId} (${partyName})`, payMethod, purchaseId, 'purchases', purchaseDate, dues);
         } else if (extraPayment < 0) {
-          await logTransaction('Income', Math.abs(extraPayment), `Refund - Purchase Order ${purchaseId} (${selectedSupplier.supp_comp_name})`, payMethod);
+          await logTransaction('Income', Math.abs(extraPayment), `Refund - Purchase Order ${purchaseId} (${partyName})`, payMethod, purchaseId, 'purchases', purchaseDate, dues);
         }
       } else {
         if (Number(advance) > 0) {
-          await logTransaction('Expense', Number(advance), `Payment - Purchase Order ${purchaseId} (${selectedSupplier.supp_comp_name})`, payMethod);
+          await logTransaction('Expense', Number(advance), `Advance Payment - Purchase Order ${purchaseId} (${partyName})`, payMethod, purchaseId, 'purchases', purchaseDate, dues);
         }
       }
 
-      alert(`Purchase Order ${editData ? 'updated' : 'created'} successfully!`);
+      toast.success(`Purchase Order ${editData ? 'updated' : 'created'} successfully!`);
       onSuccess();
     } catch (error) {
       console.error(error);
-      alert(`Error ${editData ? 'updating' : 'creating'} purchase order.`);
+      toast.error(`Error ${editData ? 'updating' : 'creating'} purchase order.`);
     } finally {
       setIsSubmitting(false);
     }

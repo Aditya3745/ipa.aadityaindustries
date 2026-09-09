@@ -1,13 +1,20 @@
 import React, { useState, useMemo } from 'react';
-import { PhoneCall, Search, User, Briefcase, ArrowLeft, FileText, Activity } from 'lucide-react';
+import { PhoneCall, Search, User, Briefcase, ArrowLeft, FileText, Activity, CreditCard } from 'lucide-react';
+import SettleDuesModal from '../../SettleDuesModal';
+import { cardStyle, inputStyle } from '../../../styles/formStyles';
 
-const cardStyle = { backgroundColor: 'white', padding: '1.5rem', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' };
-const inputStyle = { width: '100%', padding: '0.75rem 1rem 0.75rem 2.5rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.875rem' };
-
-export const ContactModule = ({ suppliers = [], customers = [], sales = [], purchases = [], transactions = [] }) => {
+export const ContactModule = ({
+  suppliers = [],
+  customers = [],
+  sales = [],
+  purchases = [],
+  transactions = [],
+  onRefresh
+}) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all'); 
   const [selectedContact, setSelectedContact] = useState(null);
+  const [isSettleModalOpen, setIsSettleModalOpen] = useState(false);
 
   // Combine and format contacts
   const contacts = useMemo(() => {
@@ -18,7 +25,7 @@ export const ContactModule = ({ suppliers = [], customers = [], sales = [], purc
       contactPerson: s.supp_comp_person || s.contact_person || '',
       type: 'Supplier',
       mobile: s.supp_comp_no || s.supp_comp_person_no || s.phone || s.mobile || '',
-      balance: s.supplier_balance || s.balance || s.opening_balance || 0,
+      balance: Number(s.supplier_balance || s.balance || s.opening_balance || 0),
       icon: <Briefcase size={20} color="#3b82f6" />
     }));
 
@@ -29,7 +36,7 @@ export const ContactModule = ({ suppliers = [], customers = [], sales = [], purc
       contactPerson: c.cust_comp_person || c.contact_person || '',
       type: 'Customer',
       mobile: c.cust_comp_no || c.cust_comp_person_no || c.customer_phone || c.phone || '',
-      balance: c.customer_balance || c.balance || c.outstanding_balance || 0,
+      balance: Number(c.customer_balance || c.balance || c.outstanding_balance || 0),
       icon: <User size={20} color="#10b981" />
     }));
 
@@ -38,7 +45,7 @@ export const ContactModule = ({ suppliers = [], customers = [], sales = [], purc
 
   // Filter contacts
   const filteredContacts = contacts.filter(contact => {
-    const matchesSearch = contact.name.toLowerCase().includes(searchTerm.toLowerCase()) || contact.mobile.includes(searchTerm);
+    const matchesSearch = contact.name.toLowerCase().includes(searchTerm.toLowerCase()) || (contact.mobile && contact.mobile.includes(searchTerm));
     const matchesType = filterType === 'all' || contact.type.toLowerCase() === filterType;
     return matchesSearch && matchesType;
   });
@@ -49,7 +56,7 @@ export const ContactModule = ({ suppliers = [], customers = [], sales = [], purc
     let history = [];
 
     if (isSupplier) {
-      const contactPurchases = purchases.filter(p => p.supplier_id === selectedContact.rawId);
+      const contactPurchases = purchases.filter(p => p.supplier_id === selectedContact.rawId || p.supplier_name === selectedContact.name);
       totalBilled = contactPurchases.reduce((sum, p) => sum + (Number(p.grand_total) || 0), 0);
       history = [
         ...contactPurchases.map(p => ({
@@ -58,30 +65,38 @@ export const ContactModule = ({ suppliers = [], customers = [], sales = [], purc
           amount: p.grand_total,
           type: 'invoice'
         })),
-        ...transactions.filter(t => t.description?.includes(selectedContact.name)).map(t => ({
-          date: t.transaction_date || t.created_at,
-          title: t.description || 'Payment',
+        ...transactions.filter(t => 
+          (t.reference_table === 'purchases' && contactPurchases.some(cp => cp.purchase_id === t.reference_id)) ||
+          t.description?.includes(selectedContact.name) ||
+          t.reference_id === selectedContact.rawId
+        ).map(t => ({
+          date: t.payment_date || t.transaction_date || t.created_at,
+          title: t.description || 'Payment to Supplier',
           amount: t.amount,
           type: 'payment',
-          method: t.payment_method
+          method: t.account_type || t.payment_method
         }))
       ];
     } else {
-      const contactSales = sales.filter(s => s.customer_name === selectedContact.name);
+      const contactSales = sales.filter(s => s.customer_id === selectedContact.rawId || s.customer_name === selectedContact.name);
       totalBilled = contactSales.reduce((sum, s) => sum + (Number(s.grand_total) || 0), 0);
       history = [
         ...contactSales.map(s => ({
           date: s.sale_date || s.created_at,
-          title: `Sale Invoice: ${s.id || s.sale_id}`,
+          title: `Sale Invoice: ${s.sale_id || s.id}`,
           amount: s.grand_total,
           type: 'invoice'
         })),
-        ...transactions.filter(t => t.description?.includes(selectedContact.name)).map(t => ({
-          date: t.transaction_date || t.created_at,
+        ...transactions.filter(t => 
+          (t.reference_table === 'sales' && contactSales.some(cs => (cs.sale_id || cs.id) === t.reference_id)) ||
+          t.description?.includes(selectedContact.name) ||
+          t.reference_id === selectedContact.rawId
+        ).map(t => ({
+          date: t.payment_date || t.transaction_date || t.created_at,
           title: t.description || 'Payment Received',
           amount: t.amount,
           type: 'payment',
-          method: t.payment_method
+          method: t.account_type || t.payment_method
         }))
       ];
     }
@@ -92,19 +107,36 @@ export const ContactModule = ({ suppliers = [], customers = [], sales = [], purc
 
     return (
       <div style={cardStyle}>
-        <button onClick={() => setSelectedContact(null)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem', padding: 0 }}>
+        <button
+          onClick={() => setSelectedContact(null)}
+          style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem', padding: 0, fontWeight: 600 }}
+        >
           <ArrowLeft size={20} /> Back to Directory
         </button>
         
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
-          <div style={{ padding: '1rem', backgroundColor: '#f1f5f9', borderRadius: '12px' }}>
-            {selectedContact.icon}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <div style={{ padding: '1rem', backgroundColor: '#f1f5f9', borderRadius: '12px' }}>
+              {selectedContact.icon}
+            </div>
+            <div>
+              <h2 style={{ margin: '0 0 0.25rem 0', fontSize: '1.5rem', color: '#0f172a' }}>{selectedContact.name}</h2>
+              {selectedContact.contactPerson && (
+                <p style={{ margin: '0 0 0.25rem 0', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <User size={14} /> {selectedContact.contactPerson}
+                </p>
+              )}
+              <p style={{ margin: 0, color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <PhoneCall size={14} /> {selectedContact.mobile || 'No Phone'}
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 style={{ margin: '0 0 0.25rem 0', fontSize: '1.5rem' }}>{selectedContact.name}</h2>
-            {selectedContact.contactPerson && <p style={{ margin: '0 0 0.25rem 0', color: '#64748b' }}><User size={14} style={{ marginRight: '4px' }}/>{selectedContact.contactPerson}</p>}
-            <p style={{ margin: 0, color: '#64748b' }}><PhoneCall size={14} style={{ marginRight: '4px' }}/>{selectedContact.mobile || 'No Phone'}</p>
-          </div>
+          <button 
+            onClick={() => setIsSettleModalOpen(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.25rem', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 2px 6px rgba(59, 130, 246, 0.3)' }}
+          >
+            <CreditCard size={18} /> {isSupplier ? 'Settle Supplier Dues' : 'Settle Customer Dues'}
+          </button>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
@@ -135,11 +167,11 @@ export const ContactModule = ({ suppliers = [], customers = [], sales = [], purc
                     {h.type === 'invoice' ? <FileText size={20} color="#3b82f6" /> : <Activity size={20} color="#10b981" />}
                   </div>
                   <div>
-                    <p style={{ margin: '0 0 0.25rem 0', fontWeight: '500', color: '#0f172a' }}>{h.title}</p>
-                    <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b' }}>{new Date(h.date).toLocaleDateString()} {h.method && `via ${h.method}`}</p>
+                    <p style={{ margin: '0 0 0.25rem 0', fontWeight: '600', color: '#0f172a' }}>{h.title}</p>
+                    <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b' }}>{new Date(h.date).toLocaleDateString()} {h.method ? `via ${h.method}` : ''}</p>
                   </div>
                 </div>
-                <div style={{ fontWeight: '600', color: h.type === 'invoice' ? '#0f172a' : (isSupplier ? '#ef4444' : '#10b981') }}>
+                <div style={{ fontWeight: '700', color: h.type === 'invoice' ? '#0f172a' : (isSupplier ? '#ef4444' : '#10b981') }}>
                   {h.type === 'payment' ? (isSupplier ? '-' : '+') : ''}₹{Number(h.amount || 0).toLocaleString()}
                 </div>
               </div>
@@ -147,6 +179,20 @@ export const ContactModule = ({ suppliers = [], customers = [], sales = [], purc
           </div>
         ) : (
           <p style={{ color: '#64748b', textAlign: 'center', padding: '2rem' }}>No transaction history found for this contact.</p>
+        )}
+
+        {/* Multi-invoice settlement modal */}
+        {isSettleModalOpen && (
+          <SettleDuesModal
+            isOpen={isSettleModalOpen}
+            onClose={() => setIsSettleModalOpen(false)}
+            contact={selectedContact}
+            sales={sales}
+            purchases={purchases}
+            onSuccess={() => {
+              if (onRefresh) onRefresh();
+            }}
+          />
         )}
       </div>
     );
@@ -163,13 +209,13 @@ export const ContactModule = ({ suppliers = [], customers = [], sales = [], purc
           <input 
             type="text" 
             placeholder="Search by name or number..." 
-            style={inputStyle} 
+            style={{ ...inputStyle, paddingLeft: '2.25rem' }} 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
         <select 
-          style={{ padding: '0.75rem 1rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.875rem', backgroundColor: 'white' }}
+          style={{ padding: '0.65rem 1rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.875rem', backgroundColor: 'white' }}
           value={filterType}
           onChange={(e) => setFilterType(e.target.value)}
         >
@@ -183,7 +229,13 @@ export const ContactModule = ({ suppliers = [], customers = [], sales = [], purc
       <div style={{ display: 'grid', gap: '1rem' }}>
         {filteredContacts.length > 0 ? (
           filteredContacts.map(contact => (
-            <div key={contact.id} onClick={() => setSelectedContact(contact)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem', border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#f8fafc', cursor: 'pointer', transition: 'background-color 0.2s' }} onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'} onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}>
+            <div
+              key={contact.id}
+              onClick={() => setSelectedContact(contact)}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem', border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#f8fafc', cursor: 'pointer', transition: 'background-color 0.2s' }}
+              onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+              onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
+            >
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                 <div style={{ padding: '0.5rem', backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
                   {contact.icon}
@@ -253,3 +305,5 @@ export const ContactModule = ({ suppliers = [], customers = [], sales = [], purc
     </div>
   );
 };
+
+export default ContactModule;

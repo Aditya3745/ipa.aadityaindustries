@@ -8,6 +8,7 @@ import { compressImageToWebP } from '../../../utils/imageUtils';
 import { pdf } from '@react-pdf/renderer';
 import { CatalogDocument } from './PdfCatalog';
 import { getWatermarkLogo, saveOrSharePDF } from '../../../utils/pdfGenerator';
+import toast from 'react-hot-toast';
 
 const cardStyle = { backgroundColor: 'white', padding: '1.5rem', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' };
 
@@ -180,7 +181,7 @@ export const ProductModal = ({ onClose, editData }) => {
           await supabase.from('stock').insert([{ product_id: editData.product_id, quantity: formData.stock_count || 0, location: 'Main Warehouse', min_quantity: formData.reorder_level || 0 }]);
         }
 
-        alert("Product updated successfully!");
+        toast.success("Product updated successfully!");
       } else {
         const { data: productsData } = await supabase.from('products').select('product_id').order('product_id', { ascending: false }).limit(1);
         let nextVal = 1; let prefix = 'AIND/PID/';
@@ -208,12 +209,13 @@ export const ProductModal = ({ onClose, editData }) => {
 
         // Optionally update sequence manager so it's not too far behind
         await supabase.from('sequence_manager').update({ current_val: nextVal }).eq('seq_name', 'PROD_ID');
-        alert("Product added successfully!");
+        toast.success("Product added successfully!");
       }
+      if (onSuccess) onSuccess();
       onClose();
     } catch (err) { 
       console.error(err); 
-      alert(`Failed to ${editData ? 'update' : 'add'} product.`); 
+      toast.error(`Failed to ${editData ? 'update' : 'add'} product: ` + (err.message || '')); 
     } finally { 
       setIsSubmitting(false); 
     }

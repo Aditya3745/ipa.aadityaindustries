@@ -1,30 +1,60 @@
 import { supabase } from '../supabase';
+import { generateId } from './sequenceManager';
 
-export const logTransaction = async (type, amount, description, paymentMethod = 'Cash') => {
-  if (amount <= 0) return;
+/**
+ * Logs a financial transaction with full reference tracking and payment date.
+ * 
+ * @param {string} type 'Income' | 'Expense' | 'Transfer'
+ * @param {number} amount Payment amount
+ * @param {string} description Human-readable description
+ * @param {string} paymentMethod 'Cash' | 'Bank' | 'UPI' | 'Cheque'
+ * @param {string|null} referenceId ID of related sale, purchase, employee, etc.
+ * @param {string|null} referenceTable 'sales' | 'purchases' | 'employees' | 'customers' | 'suppliers'
+ * @param {string|null} paymentDate YYYY-MM-DD (defaults to today)
+ * @param {number|null} dues Remaining balance due after this transaction
+ * @returns {Promise<boolean>}
+ */
+export const logTransaction = async (
+  type,
+  amount,
+  description,
+  paymentMethod = 'Cash',
+  referenceId = null,
+  referenceTable = null,
+  paymentDate = null,
+  dues = null
+) => {
+  const numericAmount = Number(amount);
+  if (!numericAmount || numericAmount <= 0) return false;
 
   try {
-    const { data: seqData } = await supabase.from('sequence_manager').select('*').eq('seq_name', 'TRANS_ID').single();
-    let newSeqVal = 1; 
-    let prefix = 'AIND/TRNS/';
-    if (seqData) { 
-      newSeqVal = (seqData.current_val || 0) + 1; 
-      prefix = seqData.prefix || prefix; 
+    const txnId = await generateId('TRANS_ID', 'AIND/TRNS/');
+    const today = new Date().toISOString().split('T')[0];
+    const txDate = paymentDate || today;
+
+    const row = {
+      transaction_id: txnId,
+      transaction_type: type,
+      amount: numericAmount,
+      description: description,
+      status: 'Completed',
+      account_type: paymentMethod || 'Cash',
+      payment_method: paymentMethod || 'Cash',
+      reference_id: referenceId ? String(referenceId) : null,
+      reference_table: referenceTable ? String(referenceTable) : null,
+      payment_date: txDate,
+      transaction_date: txDate
+    };
+
+    if (dues !== null && dues !== undefined && !isNaN(Number(dues))) {
+      row.dues = Number(dues);
     }
-    const txnId = `${prefix}${String(newSeqVal).padStart(3, '0')}`;
-    
-    const { error } = await supabase.from('transactions').insert([{ 
-       transaction_id: txnId, 
-       transaction_type: type,
-       amount: amount,
-       description: description,
-       status: 'Completed',
-       account_type: paymentMethod
-    }]);
-    
-    if (error) throw error;
-    
-    await supabase.from('sequence_manager').update({ current_val: newSeqVal }).eq('seq_name', 'TRANS_ID');
+
+    const { error } = await supabase.from('transactions').insert([row]);
+    if (error) {
+      console.error("Supabase error inserting transaction:", error);
+      throw error;
+    }
     return true;
   } catch (error) {
     console.error("Failed to log transaction:", error);
