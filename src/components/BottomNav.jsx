@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, Package, Phone, PhoneCall } from 'lucide-react';
+import { Home, Package, Phone, PhoneCall, Scissors } from 'lucide-react';
 
 const BottomNav = () => {
   return (
@@ -19,6 +19,13 @@ const BottomNav = () => {
         >
           <Package size={24} />
           <span>Products</span>
+        </NavLink>
+        <NavLink 
+          to="/admin/dashboard?module=seat_cutting" 
+          className={({ isActive }) => `bottom-nav-item ${window.location.search.includes('seat_cutting') ? 'active' : ''}`}
+        >
+          <Scissors size={24} />
+          <span>Cutting</span>
         </NavLink>
         <NavLink 
           to="/admin/dashboard?module=followup" 
