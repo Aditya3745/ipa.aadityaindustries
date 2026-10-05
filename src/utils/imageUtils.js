@@ -29,3 +29,32 @@ export const compressImageToWebP = (file, maxWidth = 800, quality = 0.8) => {
     reader.onerror = (error) => reject(error);
   });
 };
+
+export const convertWebPToJpeg = (src) => {
+  return new Promise((resolve) => {
+    if (!src) return resolve(null);
+    if (!src.startsWith('data:image/webp') && !src.includes('.webp')) {
+      return resolve(src);
+    }
+    const img = new Image();
+    img.crossOrigin = 'Anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width || 400;
+        canvas.height = img.height || 400;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0);
+        const jpegDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        resolve(jpegDataUrl);
+      } catch (err) {
+        console.warn('Failed to convert webp to jpeg:', err);
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+};

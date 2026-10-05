@@ -24,6 +24,8 @@ import { StockModule } from '../components/erp/modules/StockModule';
 import { ReportModule } from '../components/erp/modules/ReportModule';
 import { AboutModule } from '../components/erp/modules/AboutModule';
 import { ContactModule } from '../components/erp/modules/ContactModule';
+import { FollowUpModule } from '../components/erp/modules/FollowUpModule';
+import { SeatSetCuttingModule } from '../components/erp/modules/SeatSetCuttingModule';
 
 const AdminDashboard = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -130,6 +132,8 @@ const AdminDashboard = () => {
       .or(`reference_id.eq.${sale.sale_id},description.ilike.%${sale.sale_id}%`)
       .order('payment_date', { ascending: true });
 
+    const isKacha = Boolean(sale.is_kacha || (sale.notes && sale.notes.includes('[Kacha Bill]')) || sale.bill_type === 'kacha');
+
     const mappedSale = {
        ...sale,
        id: sale.sale_id,
@@ -137,7 +141,8 @@ const AdminDashboard = () => {
        amount_paid: paidAmount,
        advance_amount: Number(sale.advance_amount || 0),
        tax_total: sale.tax,
-       customer_gst_no: cust ? cust.cust_gst_no : null
+       customer_gst_no: cust ? cust.cust_gst_no : null,
+       is_kacha: isKacha
     };
     
     const mappedItems = (sale.sale_items || []).map(item => {
@@ -149,7 +154,7 @@ const AdminDashboard = () => {
         };
     });
     
-    generateIndividualInvoicePDF('sale', mappedSale, mappedItems, false, linkedTxns || []);
+    generateIndividualInvoicePDF('sale', mappedSale, mappedItems, false, linkedTxns || [], isKacha);
   };
 
   const printSinglePurchase = async (purchase) => {
@@ -200,14 +205,17 @@ const AdminDashboard = () => {
 
   // Render Logic
   if (currentView === 'create_sale') {
+    const isFromFollowUp = editTransactionData?._isFollowUpConvert;
+    const backModule = isFromFollowUp ? 'followup' : 'sell';
+    const saleEditData = isFromFollowUp ? { ...editTransactionData, _isFollowUpConvert: undefined } : editTransactionData;
     return (
       <div style={{ backgroundColor: '#f8fafc', minHeight: '100vh' }}>
-        <SecondaryAppbar title={editTransactionData ? "Edit Sale" : "Create Sale"} onBack={() => { setCurrentView('sell'); setEditTransactionData(null); }} />
+        <SecondaryAppbar title={isFromFollowUp ? 'New Sale (from Follow-up)' : editTransactionData ? 'Edit Sale' : 'Create Sale'} onBack={() => { setCurrentView(backModule); setEditTransactionData(null); }} />
         <div style={{ padding: '1rem', maxWidth: '1200px', margin: '0 auto' }}>
           <CreateSaleForm
-            editData={editTransactionData}
-            onBack={() => { setCurrentView('sell'); setEditTransactionData(null); }}
-            onSuccess={() => { refetchAll(); setCurrentView('sell'); setEditTransactionData(null); }}
+            editData={saleEditData}
+            onBack={() => { setCurrentView(backModule); setEditTransactionData(null); }}
+            onSuccess={() => { refetchAll(); setCurrentView(backModule); setEditTransactionData(null); }}
           />
         </div>
       </div>
@@ -262,7 +270,7 @@ const AdminDashboard = () => {
           <CustomerModal onClose={() => setModalConfig({ isOpen: false, type: null })} onSuccess={refetchAll} editData={modalConfig.editData} />
         )}
         {modalConfig.isOpen && modalConfig.type === 'product' && (
-          <ProductModal onClose={() => setModalConfig({ isOpen: false, type: null })} onSuccess={refetchAll} editData={modalConfig.editData} />
+          <ProductModal onClose={() => setModalConfig({ isOpen: false, type: null })} onSuccess={refetchAll} editData={modalConfig.editData} suppliers={suppliers} />
         )}
         {modalConfig.isOpen && modalConfig.type === 'supplier' && (
           <SupplierModal onClose={() => setModalConfig({ isOpen: false, type: null })} onSuccess={refetchAll} editData={modalConfig.editData} />
@@ -293,8 +301,8 @@ const AdminDashboard = () => {
 
 const SecondaryAppbar = ({ title, onBack }) => (
   <div style={{ backgroundColor: '#1e293b', padding: '1rem', color: 'white', display: 'flex', alignItems: 'center' }}>
-    <ArrowLeft size={24} style={{ cursor: 'pointer', marginRight: '1rem' }} onClick={onBack} />
-    <h1 style={{ fontSize: '1.25rem', margin: 0, fontWeight: '600' }}>{title}</h1>
+    <button onClick={onBack} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', marginRight: '1rem' }}>Back</button>
+    <h1 style={{ fontSize: '1.25rem', margin: 0 }}>{title}</h1>
   </div>
 );
 
@@ -321,15 +329,17 @@ const ModuleView = ({ view, data, actions }) => {
   if (view === 'employee') return <EmployeeModule employees={employees} setModalConfig={setModalConfig} onRefresh={onRefresh} />;
   if (view === 'users') return <UserModule users={users} setModalConfig={setModalConfig} onRefresh={onRefresh} />;
   if (view === 'customer') return <CustomerModule customers={customers} setModalConfig={setModalConfig} printCustomersTable={printCustomersTable} onRefresh={onRefresh} />;
-  if (view === 'product') return <ProductModule products={products} setModalConfig={setModalConfig} printProductsTable={printProductsTable} onRefresh={onRefresh} />;
+  if (view === 'product') return <ProductModule products={products} suppliers={suppliers} setModalConfig={setModalConfig} printProductsTable={printProductsTable} onRefresh={onRefresh} />;
   if (view === 'sell') return <SellModule sales={sales} setCurrentView={setCurrentView} printSalesTable={printSalesTable} printSingleSale={printSingleSale} setEditTransactionData={setEditTransactionData} onRefresh={onRefresh} />;
   if (view === 'purchase') return <PurchaseModule purchases={purchases} setCurrentView={setCurrentView} printPurchasesTable={printPurchasesTable} printSinglePurchase={printSinglePurchase} setEditTransactionData={setEditTransactionData} onRefresh={onRefresh} />;
-  if (view === 'stock') return <StockModule stock={stock} printStockTable={printStockTable} onRefresh={onRefresh} />;
+  if (view === 'stock') return <StockModule stock={stock} sales={sales} purchases={purchases} manufacturing={manufacturing} products={products} suppliers={suppliers} printStockTable={printStockTable} onRefresh={onRefresh} />;
   if (view === 'manufacturing') return <ManufacturingModule manufacturing={manufacturing} setModalConfig={setModalConfig} onRefresh={onRefresh} />;
+  if (view === 'seat_cutting') return <SeatSetCuttingModule />;
   if (view === 'accounts') return <AccountsModule transactions={transactions} setModalConfig={setModalConfig} onRefresh={onRefresh} />;
   if (view === 'report') return <ReportModule report_logs={reportLogs} printSalesTable={printSalesTable} printCustomersTable={printCustomersTable} onRefresh={onRefresh} />;
   if (view === 'about') return <AboutModule />;
   if (view === 'contact') return <ContactModule suppliers={suppliers} customers={customers} sales={sales} purchases={purchases} transactions={transactions} onRefresh={onRefresh} />;
+  if (view === 'followup') return <FollowUpModule customers={customers} products={products} onRefresh={onRefresh} setCurrentView={setCurrentView} setEditTransactionData={setEditTransactionData} />;
 
   // Fallback for unbuilt modules
   const cardStyle = { backgroundColor: 'white', padding: '1.5rem', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' };

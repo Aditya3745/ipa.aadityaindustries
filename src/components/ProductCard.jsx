@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Box, Image, Edit2, Share2 } from 'lucide-react';
-import '@google/model-viewer';
+
 import styles from './ProductCard.module.css';
 import { shareProduct } from '../utils/shareUtils';
 
@@ -10,6 +10,12 @@ const ProductCard = ({ title, description, images, category, badge, materials, d
   const [showSpecs, setShowSpecs] = useState(false);
   const [viewMode, setViewMode] = useState('image');
   const [isSharing, setIsSharing] = useState(false);
+
+  useEffect(() => {
+    if (model_3d_url && viewMode === '3d') {
+      import('@google/model-viewer').catch(err => console.error('Failed to load model viewer', err));
+    }
+  }, [model_3d_url, viewMode]);
 
   const nextImage = (e) => {
     e.stopPropagation();

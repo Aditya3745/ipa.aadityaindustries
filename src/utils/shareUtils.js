@@ -10,7 +10,7 @@ export const shareProduct = async (product) => {
     let shareUrl = null;
     let webFile = null;
 
-    if (imageUrl && !imageUrl.startsWith('data:')) {
+    if (imageUrl) {
       const response = await fetch(imageUrl);
       const blob = await response.blob();
 

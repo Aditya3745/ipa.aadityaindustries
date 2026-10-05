@@ -79,13 +79,14 @@ const styles = StyleSheet.create({
 // A valid fallback image to prevent crash if product image is empty
 const FALLBACK_IMAGE = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
 
-export const CatalogDocument = ({ products, logoBase64 }) => (
+export const CatalogDocument = ({ products, logoBase64, showPrice = true }) => (
   <Document>
     {/* Cover Page */}
     <Page size="A4" style={styles.coverPage}>
       {logoBase64 && <Image src={logoBase64} style={styles.logo} />}
       <Text style={styles.title}>Aaditya Industries</Text>
       <Text style={styles.subtitle}>Premium Office Seating Catalog</Text>
+      {!showPrice && <Text style={{ fontSize: 10, color: '#94a3b8', marginTop: 8 }}>* Prices not displayed in this catalog</Text>}
     </Page>
 
     {/* Product Pages */}
@@ -93,7 +94,7 @@ export const CatalogDocument = ({ products, logoBase64 }) => (
       <View style={styles.grid}>
         {products.map((product, index) => {
           const rawImg = (product.images && product.images.length > 0) ? product.images[0] : (product.image_url || '');
-          const imgUrl = (rawImg && !rawImg.startsWith('data:image/webp') && !rawImg.endsWith('.webp')) ? rawImg : FALLBACK_IMAGE;
+          const imgUrl = product.catalogImage || ((rawImg && !rawImg.startsWith('data:image/webp') && !rawImg.endsWith('.webp')) ? rawImg : FALLBACK_IMAGE);
           
           return (
             <View key={product.product_id || index} style={styles.card} wrap={false}>
@@ -109,9 +110,11 @@ export const CatalogDocument = ({ products, logoBase64 }) => (
                 {product.category || 'Furniture'}
               </Text>
               
-              <Text style={styles.productPrice}>
-                ₹{Number(product.selling_rate || 0).toLocaleString()}
-              </Text>
+              {showPrice && (
+                <Text style={styles.productPrice}>
+                  ₹{Number(product.selling_rate || 0).toLocaleString()}
+                </Text>
+              )}
             </View>
           );
         })}

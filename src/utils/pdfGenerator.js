@@ -1,5 +1,4 @@
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+
 import { Share } from '@capacitor/share';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 
@@ -69,6 +68,8 @@ export const saveOrSharePDF = async (doc, fileName, isReactPdfBlob = false) => {
 
 // 1. Generic Table / Collective Report
 export const generateCollectiveReportPDF = async (title, tableColumn, tableRows) => {
+  const { default: jsPDF } = await import('jspdf');
+  const { default: autoTable } = await import('jspdf-autotable');
   const doc = new jsPDF('landscape');
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -139,10 +140,21 @@ export const generateCollectiveReportPDF = async (title, tableColumn, tableRows)
 };
 
 // 2. Individual Invoice / Quotation / Purchase Note
-export const generateIndividualInvoicePDF = async (type, data, items = [], isQuotation = false, payments = []) => {
+export const generateIndividualInvoicePDF = async (type, data, items = [], isQuotation = false, payments = [], isKachaOverride = null) => {
+  const { default: jsPDF } = await import('jspdf');
+  const { default: autoTable } = await import('jspdf-autotable');
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
+
+  // Determine if this is a Kacha Bill (Estimate / Cash Memo without GST details)
+  const isKacha = isKachaOverride !== null 
+    ? Boolean(isKachaOverride) 
+    : Boolean(
+        data?.is_kacha || 
+        data?.bill_type === 'kacha' || 
+        (data?.notes && data.notes.includes('[Kacha Bill]'))
+      );
 
   // Header Logo (Top Right) - strictly preserving 300x107 aspect ratio (2.8:1)
   const logoBase64 = await getWatermarkLogo();
@@ -164,7 +176,11 @@ export const generateIndividualInvoicePDF = async (type, data, items = [], isQuo
   doc.setFont("helvetica", "normal");
   doc.setTextColor(71, 85, 105);
   doc.text("Devi Sthan, Lohanipur-3, Patna, Bihar - 800003", 14, 24);
-  doc.text("GSTIN: 10ENXPD2245A1ZL | Adityamohan425@gmail.com | +91-6202759310", 14, 29);
+  if (isKacha) {
+    doc.text("Adityamohan425@gmail.com | +91-6202759310", 14, 29);
+  } else {
+    doc.text("GSTIN: 10ENXPD2245A1ZL | Adityamohan425@gmail.com | +91-6202759310", 14, 29);
+  }
 
   doc.setLineWidth(0.8);
   doc.setDrawColor(203, 213, 225);
@@ -174,7 +190,11 @@ export const generateIndividualInvoicePDF = async (type, data, items = [], isQuo
   doc.setFontSize(13);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(15, 23, 42);
-  const title = isQuotation ? "QUOTATION" : (type === 'sale' ? "TAX INVOICE" : "PURCHASE NOTE");
+  const title = isQuotation 
+    ? "QUOTATION" 
+    : (type === 'sale' 
+        ? (isKacha ? "ESTIMATE / CASH MEMO" : "TAX INVOICE") 
+        : "PURCHASE NOTE");
   doc.text(title, pageWidth / 2, 42, { align: "center" });
 
   // Two Column Info Block
@@ -220,7 +240,7 @@ export const generateIndividualInvoicePDF = async (type, data, items = [], isQuo
     const rawAddr = data.customer_address || data.cust_address || '';
     const addr = cleanPdfText(rawAddr);
     doc.text(`Address: ${addr ? addr.substring(0, 45) : 'N/A'}`, 14, 70);
-    if (!isQuotation) {
+    if (!isQuotation && !isKacha) {
       doc.text(`GSTIN: ${formatVal(data.customer_gst_no || data.customer_gstno || data.cust_gst_no)}`, 14, 75);
     }
 
@@ -299,7 +319,7 @@ export const generateIndividualInvoicePDF = async (type, data, items = [], isQuo
   }
 
   const rightColX = pageWidth - 14;
-  const labelColX = pageWidth - 70;
+  const labelColX = pageWidth - 85;
 
   const addRow = (label, value, isBold = false) => {
     doc.setFont("helvetica", isBold ? "bold" : "normal");
@@ -311,7 +331,7 @@ export const generateIndividualInvoicePDF = async (type, data, items = [], isQuo
   doc.setFontSize(9);
   addRow("Sub Total:", `Rs. ${Number(data.total_amount || 0).toFixed(2)}`);
   if (Number(data.discount || 0) > 0) addRow("Discount:", `-Rs. ${Number(data.discount).toFixed(2)}`);
-  if (Number(data.tax_total || data.tax || 0) > 0) addRow("Tax:", `Rs. ${Number(data.tax_total || data.tax).toFixed(2)}`);
+  if (!isKacha && Number(data.tax_total || data.tax || 0) > 0) addRow("Tax:", `Rs. ${Number(data.tax_total || data.tax).toFixed(2)}`);
   if (Number(data.transport || 0) > 0) addRow("Transport:", `Rs. ${Number(data.transport).toFixed(2)}`);
 
   currentY += 1;
@@ -340,7 +360,7 @@ export const generateIndividualInvoicePDF = async (type, data, items = [], isQuo
   if (isFullyPaid) {
     currentY += 2;
     doc.setTextColor(16, 185, 129); // Green
-    addRow("Payment Status:", "PAYMENT DONE (CLEARED)", true);
+    addRow("Payment Status:", "PAID IN FULL", true);
     doc.setTextColor(0, 0, 0);
   } else {
     currentY += 2;

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Seat set cutting and advance calculator</title>
+<style>
+:root{--bg:#f3f5f7;--card:#fff;--tx:#1b2430;--mut:#5d6b7a;--ln:#c9d1d9;--acc:#0f6e56;--soft:#e1f5ee;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12171d;--card:#1b232c;--tx:#e8edf2;--mut:#93a1b0;--ln:#34414f;--acc:#5dcaa5;--soft:#12332b}}
+:root[data-theme="dark"]{--bg:#12171d;--card:#1b232c;--tx:#e8edf2;--mut:#93a1b0;--ln:#34414f;--acc:#5dcaa5;--soft:#12332b}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:620px;margin:0 auto;padding:16px}
+h1{font-size:20px;font-weight:600;margin:0 0 2px}
+h2{font-size:15px;font-weight:600;margin:0 0 8px}
+p.s{margin:0 0 14px;color:var(--mut);font-size:13px}
+.card{background:var(--card);border:1px solid var(--ln);border-radius:10px;padding:14px;margin-bottom:12px}
+.g{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.full{grid-column:1/-1}
+label{display:block;font-size:12px;color:var(--mut)}
+input,select{display:block;width:100%;margin-top:3px;font:inherit;font-size:16px;color:var(--tx);background:var(--bg);border:1px solid var(--ln);border-radius:6px;padding:8px;min-width:0}
+input:focus-visible,select:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+.pt{display:grid;grid-template-columns:34px repeat(4,1fr);gap:6px;align-items:center;margin-bottom:6px}
+.pt input{padding:6px;margin:0;font-size:15px}
+.hd{font-size:12px;color:var(--mut)}
+.chk{display:flex;gap:6px;align-items:center;margin-top:8px}.chk input{width:auto;margin:0}
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;text-align:center}
+.stats div{border:1px solid var(--ln);border-radius:8px;padding:6px}
+.stats span{display:block;font-size:12px;color:var(--mut)}
+.stats strong{font-size:17px;font-weight:600}
+.mini{position:relative;width:100%;border:2px solid var(--tx);background-color:var(--card);margin-top:4px}
+.pc{position:absolute;border:1px solid;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;text-align:center;line-height:1.2}
+.pc b{font-weight:600}
+.sh{margin-top:14px}
+.big{background:var(--soft);border-radius:8px;padding:12px;margin-bottom:12px}
+.big span{font-size:13px;color:var(--mut)}
+.big strong{display:block;font-size:30px;font-weight:600;color:var(--acc);line-height:1.2}
+.r{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px dashed var(--ln);font-size:14px}
+.r:last-child{border:0}.r b{font-weight:600}.r.t{font-size:16px;border-bottom:1px solid var(--ln)}
+.note{font-size:12px;color:var(--mut);margin-top:8px}
+</style>
+</head>
+<body>
+<main>
+<h1>Seat set cutting and advance calculator</h1>
+<p class="s">Each seat adds pieces. The 1.5′ × 4′ divider is shared between neighbouring seats, so a set of S seats needs S + 1 dividers.</p>
+
+<div class="card">
+  <div class="g">
+    <label>Seats per set<input id="seats" type="number" min="1" step="1" value="1" inputmode="numeric"></label>
+    <label>Number of sets<input id="sets" type="number" min="1" step="1" value="1" inputmode="numeric"></label>
+    <label>Sheet length (ft)<input id="sw" type="number" min="1" step="0.25" value="8" inputmode="decimal"></label>
+    <label>Sheet width (ft)<input id="sh" type="number" min="1" step="0.25" value="4" inputmode="decimal"></label>
+  </div>
+  <label class="chk"><input type="checkbox" id="rot" checked> Allow rotating pieces</label>
+</div>
+
+<div class="card">
+  <h2>Pieces</h2>
+  <div class="pt hd"><span>Name</span><span>Length</span><span>Width</span><span>Fixed qty</span><span>Per seat</span></div>
+  <div id="parts"></div>
+  <div class="note" id="qtynote"></div>
+</div>
+
+<div class="card">
+  <h2>Cutting result</h2>
+  <div class="stats" id="stats"></div><div class="note" id="use"></div>
+  <div id="out"></div>
+</div>
+
+<div class="card">
+  <h2>Cost and advance</h2>
+  <div class="g">
+    <label>Material rate per sq ft<input id="mr" type="number" min="0" value="75" inputmode="decimal"></label>
+    <label>Material counted on
+      <select id="mb"><option value="sheets">Sheets bought (full sheet)</option><option value="used">Only sq ft used</option></select>
+    </label>
+    <label>Import transport per sheet<input id="it" type="number" min="0" value="0" inputmode="decimal"></label>
+    <label>Extra material per seat<input id="em" type="number" min="0" value="300" inputmode="decimal"></label>
+    <label>Labour per seat<input id="lab" type="number" min="0" value="1500" inputmode="decimal"></label>
+    <label>Other one-time cost<input id="fx" type="number" min="0" value="0" inputmode="decimal"></label>
+    <label>Your margin %<input id="mg" type="number" min="0" value="15" inputmode="decimal"></label>
+    <label>GST %<input id="gst" type="number" min="0" value="0" inputmode="decimal"></label>
+    <label>Advance %<input id="adv" type="number" min="0" max="100" value="50" inputmode="decimal"></label>
+    <label>Advance already received<input id="rec" type="number" min="0" value="0" inputmode="decimal"></label>
+  </div>
+  <div class="note" id="mnote"></div>
+</div>
+<div class="big"><span>Advance to ask</span><strong id="ad">0</strong><span id="adn"></span></div>
+<div class="card"><h2>Breakdown</h2><div id="bd"></div></div>
+</main>
+<script>
+var C=[["#9FE1CB","#0F6E56","#04342C"],["#CECBF6","#534AB7","#26215C"],["#F5C4B3","#993C1D","#4A1B0C"],["#FAC775","#854F0B","#412402"],["#B5D4F4","#185FA5","#042C53"],["#C0DD97","#3B6D11","#173404"]];
+var parts=[{n:"A",w:1.5,h:4,f:1,s:1},{n:"C",w:4,h:2,f:0,s:1},{n:"D",w:2,h:1.5,f:0,s:1},{n:"E",w:2,h:0.5,f:0,s:2}];
+var res=null;
+function $(i){return document.getElementById(i)}
+function v(i){var x=parseFloat($(i).value);return isFinite(x)&&x>0?x:0}
+function iv(i){return Math.max(1,Math.floor(v(i)))}
+function fmt(n){return (Math.round(n*100)/100)+""}
+function m(x){return "₹ "+Math.round(x).toLocaleString("en-IN")}
+function ovl(a,b){return a.x<b.x+b.w-1e-6&&b.x<a.x+a.w-1e-6&&a.y<b.y+b.h-1e-6&&b.y<a.y+a.h-1e-6}
+function qty(p,S){return Math.max(0,Math.round(p.f+p.s*S))}
+function drawParts(){
+  $("parts").innerHTML=parts.map(function(p,i){
+    return '<div class="pt" data-i="'+i+'"><input data-k="n" value="'+p.n+'" aria-label="Name">'+["w","h","f","s"].map(function(k){return '<input data-k="'+k+'" type="number" step="0.25" min="0" inputmode="decimal" value="'+p[k]+'" aria-label="'+k+'">'}).join("")+'</div>'}).join("");
+}
+$("parts").addEventListener("input",function(e){
+  var r=e.target.closest("[data-i]"),k=e.target.dataset.k;if(!r||!k)return;
+  var p=parts[r.dataset.i];if(k=="n")p.n=e.target.value||"?";else p[k]=Math.max(0,parseFloat(e.target.value)||0);calc();
+});
+function fit(sh,w,h,rot){
+  var best=null;
+  sh.free.forEach(function(f){([[w,h],[h,w]].slice(0,rot?2:1)).forEach(function(o){
+    if(o[0]<=f.w+1e-9&&o[1]<=f.h+1e-9){var s=Math.min(f.w-o[0],f.h-o[1]);if(!best||s<best.s)best={s:s,x:f.x,y:f.y,w:o[0],h:o[1]}}})});
+  return best;
+}
+function commit(sh,b){
+  var nf=[];
+  sh.free.forEach(function(f){
+    if(!ovl(f,b)){nf.push(f);return}
+    if(b.x>f.x)nf.push({x:f.x,y:f.y,w:b.x-f.x,h:f.h});
+    if(b.x+b.w<f.x+f.w)nf.push({x:b.x+b.w,y:f.y,w:f.x+f.w-b.x-b.w,h:f.h});
+    if(b.y>f.y)nf.push({x:f.x,y:f.y,w:f.w,h:b.y-f.y});
+    if(b.y+b.h<f.y+f.h)nf.push({x:f.x,y:b.y+b.h,w:f.w,h:f.y+f.h-b.y-b.h})});
+  sh.free=nf.filter(function(a,i){return !nf.some(function(b,j){return i!=j&&b.x<=a.x+1e-9&&b.y<=a.y+1e-9&&b.x+b.w>=a.x+a.w-1e-9&&b.y+b.h>=a.y+a.h-1e-9&&(i>j||a.w!=b.w||a.h!=b.h||a.x!=b.x||a.y!=b.y)})});
+}
+function once(order,W,H,rot){
+  var sheets=[],skip=0;
+  order.forEach(function(it){
+    var b=null,sh=null;
+    for(var i=0;i<sheets.length&&!b;i++){b=fit(sheets[i],it.w,it.h,rot);if(b)sh=sheets[i]}
+    if(!b){var ns={free:[{x:0,y:0,w:W,h:H}],items:[]};b=fit(ns,it.w,it.h,rot);if(!b){skip++;return}sheets.push(ns);sh=ns}
+    commit(sh,b);sh.items.push({n:it.n,c:it.c,w:b.w,h:b.h,x:b.x,y:b.y});
+  });
+  return {sheets:sheets.map(function(s){return s.items}),skip:skip};
+}
+function area(sh){return sh.reduce(function(s,p){return s+p.w*p.h},0)}
+function best(items,W,H,rot){
+  var tr=Math.max(8,Math.min(300,Math.floor(4000/Math.max(1,items.length)))),b=null;
+  for(var t=0;t<tr;t++){
+    var o=items.slice();
+    if(t==0)o.sort(function(a,c){return c.w*c.h-a.w*a.h});
+    else if(t==1)o.sort(function(a,c){return Math.max(c.w,c.h)-Math.max(a.w,a.h)||c.w*c.h-a.w*a.h});
+    else for(var i=o.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1)),x=o[i];o[i]=o[j];o[j]=x}
+    var r=once(o,W,H,rot);r.low=Math.min.apply(null,r.sheets.map(area).concat([1e9]));
+    if(!b||r.skip<b.skip||(r.skip==b.skip&&(r.sheets.length<b.sheets.length||(r.sheets.length==b.sheets.length&&r.low<b.low))))b=r;
+  }
+  return b;
+}
+function mini(items,parent,W,H){
+  var el=document.createElement("div");el.className="mini";parent.appendChild(el);
+  var k=el.clientWidth/W;el.style.height=H*k+"px";
+  el.style.backgroundImage="linear-gradient(to right,rgba(128,140,150,.28) 1px,transparent 1px),linear-gradient(to bottom,rgba(128,140,150,.28) 1px,transparent 1px)";
+  el.style.backgroundSize=k+"px "+k+"px";
+  items.forEach(function(p){
+    var c=C[p.c%C.length],d=document.createElement("div"),w=p.w*k,h=p.h*k;d.className="pc";
+    d.style.cssText="left:"+p.x*k+"px;top:"+p.y*k+"px;width:"+w+"px;height:"+h+"px;background:"+c[0]+";border-color:"+c[1]+";color:"+c[2]+";font-size:"+Math.max(9,Math.min(12,Math.min(w,h)/2.4))+"px";
+    d.title=p.n+" "+fmt(p.w)+"′ × "+fmt(p.h)+"′";
+    if(w>=18&&h>=14){var b=document.createElement("b");b.textContent=p.n;d.appendChild(b)}
+    if(w>=64&&h>=36){var s=document.createElement("span");s.textContent=fmt(p.w)+"′ × "+fmt(p.h)+"′";d.appendChild(s)}
+    el.appendChild(d)});
+}
+function cuts(sh){var o={},a=[];sh.forEach(function(p){var k=p.n+" "+fmt(p.w)+"×"+fmt(p.h);o[k]=(o[k]||0)+1});for(var k in o)a.push(o[k]+" × "+k);return a.join(", ")}
+function mk(S,N){var it=[];parts.forEach(function(p,i){for(var q=qty(p,S)*N;q>0;q--)it.push({n:p.n,w:p.w,h:p.h,c:i})});return it}
+function calc(){
+  var S=iv("seats"),N=iv("sets"),W=v("sw")||8,H=v("sh")||4,rot=$("rot").checked,tot=W*H;
+  $("qtynote").textContent="For "+S+" seat"+(S>1?"s":"")+": "+parts.map(function(p){return qty(p,S)+" × "+p.n}).join(", ");
+  var one=best(mk(S,1),W,H,rot),list,counts,skip=one.skip;
+  list=one.sheets;counts=list.map(function(){return N});
+  if(N>1){
+    var g=best(mk(S,N),W,H,rot);
+    if(g.skip==0&&g.sheets.length<list.length*N){list=g.sheets;counts=list.map(function(){return 1});skip=0}
+  }
+  var nS=counts.reduce(function(a,b){return a+b},0),used=0;
+  list.forEach(function(sh,i){used+=area(sh)*counts[i]});
+  var pieces=mk(S,N).length;
+  $("stats").innerHTML='<div><span>Pieces</span><strong>'+pieces+'</strong></div><div><span>Sheets</span><strong>'+nS+'</strong></div><div><span>Used</span><strong>'+fmt(used)+' sq ft</strong></div><div><span>Leftover</span><strong>'+fmt(nS*tot-used)+' sq ft</strong></div>';
+  $("use").textContent="Sheet area "+fmt(nS*tot)+" sq ft ("+nS+" × "+fmt(tot)+"). Used "+fmt(used)+" sq ft = "+fmt(used/(nS*tot)*100)+"%. Per seat: "+fmt(used/(S*N))+" sq ft.";
+  var out=$("out");out.innerHTML="";
+  if(skip){var w=document.createElement("p");w.className="note";w.textContent=skip+" piece(s) are bigger than the sheet and were left out.";out.appendChild(w)}
+  list.slice(0,12).forEach(function(sh,i){
+    var d=document.createElement("div");d.className="sh";
+    var h=document.createElement("div");h.className="hd";h.style.color="var(--tx)";
+    h.textContent="Sheet "+(i+1)+(counts[i]>1?" (make "+counts[i]+" like this)":"")+": used "+fmt(area(sh))+", leftover "+fmt(tot-area(sh))+" sq ft";
+    var c=document.createElement("div");c.className="hd";c.textContent=cuts(sh);
+    d.appendChild(h);d.appendChild(c);out.appendChild(d);mini(sh,d,W,H)});
+  if(list.length>12){var x=document.createElement("p");x.className="note";x.textContent="Showing the first 12 of "+list.length+" sheets.";out.appendChild(x)}
+  var seatsAll=S*N,rate=v("mr"),matSq=$("mb").value=="used"?used:nS*tot;
+  var mat=matSq*rate,imp=nS*v("it"),ext=seatsAll*v("em"),lab=seatsAll*v("lab"),fx=v("fx");
+  $("mnote").textContent="Rate "+m(rate)+"/sq ft = "+m(rate*tot)+" per "+fmt(tot)+" sq ft sheet. Material counted: "+fmt(matSq)+" sq ft.";
+  var cost=mat+imp+ext+lab+fx,pr=cost*v("mg")/100,sub=cost+pr,g2=sub*v("gst")/100,T=sub+g2;
+  var adv=T*Math.min(100,v("adv"))/100,rec=v("rec"),due=Math.max(0,adv-rec),bal=T-Math.max(adv,rec);
+  $("ad").textContent=m(due);
+  $("adn").textContent=rec>0?"Advance "+m(adv)+", already received "+m(rec):fmt(v("adv"))+"% of "+m(T);
+  function row(l,val,c){return '<div class="r'+(c?" "+c:"")+'"><span>'+l+'</span><b>'+val+'</b></div>'}
+  $("bd").innerHTML=row("Material ("+fmt(matSq)+" sq ft × "+m(rate)+")",m(mat))+row("Import transport ("+nS+" sheet"+(nS==1?"":"s")+" × "+m(v("it"))+")",m(imp))+row("Extra material ("+seatsAll+" seats)",m(ext))+row("Labour ("+seatsAll+" seats)",m(lab))+(fx?row("Other one-time cost",m(fx)):"")+row("Total cost",m(cost))+row("Your margin ("+fmt(v("mg"))+"%)",m(pr))+(v("gst")?row("GST ("+fmt(v("gst"))+"%)",m(g2)):"")+row("Selling price",m(T),"t")+row("Price per seat",m(T/seatsAll))+row("Price per sq ft used",m(T/used))+row("Advance",m(adv))+row("Balance after advance",m(bal));
+}
+["seats","sets","sw","sh","rot","mr","mb","it","em","lab","fx","mg","gst","adv","rec"].forEach(function(i){$(i).addEventListener("input",calc)});
+drawParts();calc();
+window.addEventListener("resize",calc);
+</script>
+</body>
+</html>

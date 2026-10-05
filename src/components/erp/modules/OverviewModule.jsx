@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, Package, ShoppingCart, ShoppingBag, ArrowRight } from 'lucide-react';
+import { Users, Package, ShoppingCart, ShoppingBag, ArrowRight, Phone, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 
 export const OverviewModule = ({ data, setCurrentView }) => {
   const { customers, products, sales, purchases, transactions, suppliers, stock } = data;
@@ -75,12 +75,38 @@ export const OverviewModule = ({ data, setCurrentView }) => {
             <Package size={20} /> Critical Low Stock Alerts
           </h3>
           <div style={{ display: 'grid', gap: '0.75rem' }}>
-            {lowStockItems.map((item, idx) => (
-              <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', backgroundColor: 'white', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid #fca5a5' }}>
-                <span style={{ fontWeight: '500', color: '#7f1d1d' }}>{item.products?.product_name || `Product ID: ${item.product_id}`}</span>
-                <span style={{ color: '#ef4444', fontWeight: 'bold' }}>Stock: {item.quantity} (Min: {item.min_quantity})</span>
-              </div>
-            ))}
+            {lowStockItems.map((item, idx) => {
+              const prod = item.products || (products || []).find(p => p.product_id === item.product_id) || {};
+              const supplier = (suppliers || []).find(s => s.supplier_id === prod.supplier_id);
+              const phone = supplier?.supp_comp_no || supplier?.supp_comp_person_no;
+              return (
+                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'white', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid #fca5a5', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <div>
+                    <div style={{ fontWeight: '600', color: '#7f1d1d' }}>{prod.product_name || `Product ID: ${item.product_id}`}</div>
+                    {supplier && (
+                      <div style={{ fontSize: '0.8rem', color: '#475569', marginTop: '0.2rem' }}>
+                        Supplier: <strong>{supplier.supp_comp_name}</strong> {phone ? `(${phone})` : ''}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <span style={{ color: '#ef4444', fontWeight: 'bold' }}>Stock: {item.quantity} (Min: {item.min_quantity})</span>
+                    {phone ? (
+                      <a
+                        href={`tel:${phone}`}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', backgroundColor: '#22c55e', color: 'white', padding: '0.4rem 0.8rem', borderRadius: '6px', textDecoration: 'none', fontWeight: 'bold', fontSize: '0.8rem', boxShadow: '0 2px 4px rgba(34,197,94,0.3)' }}
+                      >
+                        <Phone size={14} /> Call Supplier
+                      </a>
+                    ) : supplier ? (
+                      <span style={{ fontSize: '0.75rem', color: '#94a3b8', italic: 'true' }}>No phone listed</span>
+                    ) : (
+                      <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>No supplier assigned</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -117,38 +143,83 @@ export const OverviewModule = ({ data, setCurrentView }) => {
         />
       </div>
 
+      {/* Enhanced Recent Transactions Section */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.5rem' }}>
-        <div style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)', overflow: 'hidden' }}>
-          <div style={{ padding: '1.5rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ margin: 0, color: '#1e293b', fontSize: '1.1rem' }}>Recent Transactions</h3>
+        <div style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)', overflow: 'hidden', border: '1px solid #f1f5f9' }}>
+          <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 style={{ margin: 0, color: '#1e293b', fontSize: '1.1rem', fontWeight: 'bold' }}>Recent Transactions Ledger</h3>
             <button 
               onClick={() => setCurrentView('accounts')}
-              style={{ background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.875rem', fontWeight: '500' }}
+              style={{ background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.875rem', fontWeight: '600' }}
             >
-              View All <ArrowRight size={16} />
+              View Full Accounts <ArrowRight size={16} />
             </button>
           </div>
-          <div style={{ padding: '0 1.5rem' }}>
-            {transactions.slice(0, 5).map((txn, idx) => (
-              <div key={txn.transaction_id || idx} style={{ padding: '1rem 0', borderBottom: idx !== 4 ? '1px solid #e2e8f0' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <p style={{ margin: '0 0 0.25rem 0', fontWeight: '500', color: '#1e293b' }}>
-                    {txn.transaction_type.charAt(0).toUpperCase() + txn.transaction_type.slice(1)}
-                  </p>
-                  <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b' }}>
-                    {new Date(txn.transaction_date).toLocaleDateString()}
-                  </p>
+          <div style={{ padding: '0.5rem 1.5rem' }}>
+            {transactions.slice(0, 6).map((txn, idx) => {
+              const isIncome = (txn.transaction_type || '').toLowerCase() === 'income';
+              const formattedDate = (txn.payment_date || txn.transaction_date || txn.created_at || '').split('T')[0];
+              const desc = txn.description || (txn.reference_id ? `Ref: ${txn.reference_id}` : (isIncome ? 'General Income Received' : 'Expense Payment Made'));
+              
+              return (
+                <div 
+                  key={txn.transaction_id || idx} 
+                  style={{ 
+                    padding: '0.85rem 0', 
+                    borderBottom: idx !== 5 && idx !== transactions.length - 1 ? '1px solid #f1f5f9' : 'none', 
+                    display: 'flex', 
+                    justify: 'space-between', 
+                    alignItems: 'center',
+                    gap: '1rem'
+                  }}
+                >
+                  {/* Left: Direction Badge + Details */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flex: 1, minWidth: 0 }}>
+                    <div style={{ 
+                      width: '36px', 
+                      height: '36px', 
+                      borderRadius: '50%', 
+                      backgroundColor: isIncome ? '#f0fdf4' : '#fef2f2',
+                      border: `1px solid ${isIncome ? '#bbf7d0' : '#fecaca'}`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0
+                    }}>
+                      {isIncome ? <ArrowUpRight size={20} color="#16a34a" /> : <ArrowDownRight size={20} color="#dc2626" />}
+                    </div>
+
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: '0 0 0.2rem 0', fontWeight: '600', color: '#0f172a', fontSize: '0.9rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {desc}
+                      </p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', fontSize: '0.775rem', color: '#64748b', flexWrap: 'wrap' }}>
+                        <span>{formattedDate}</span>
+                        {txn.reference_id && (
+                          <span style={{ backgroundColor: '#f1f5f9', padding: '1px 6px', borderRadius: '4px', color: '#475569', fontWeight: 600 }}>
+                            {txn.reference_id}
+                          </span>
+                        )}
+                        {txn.transaction_id && (
+                          <span style={{ color: '#94a3b8' }}>({txn.transaction_id})</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right: Amount & Mode Badge */}
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <p style={{ margin: '0 0 0.2rem 0', fontWeight: '700', fontSize: '1rem', color: isIncome ? '#16a34a' : '#dc2626' }}>
+                      {isIncome ? '+' : '-'}₹{Number(txn.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </p>
+                    <span style={{ fontSize: '0.725rem', padding: '2px 8px', borderRadius: '12px', backgroundColor: '#f1f5f9', color: '#475569', fontWeight: 600 }}>
+                      {txn.account_type || txn.payment_method || 'Cash'}
+                    </span>
+                  </div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                  <p style={{ margin: '0 0 0.25rem 0', fontWeight: '600', color: (txn.transaction_type || '').toLowerCase() === 'income' ? '#10b981' : '#ef4444' }}>
-                    {(txn.transaction_type || '').toLowerCase() === 'income' ? '+' : '-'}₹{Number(txn.amount || 0).toLocaleString()}
-                  </p>
-                  <span style={{ fontSize: '0.75rem', padding: '0.125rem 0.5rem', borderRadius: '12px', backgroundColor: '#f1f5f9', color: '#64748b' }}>
-                    {txn.payment_method || 'Unknown'}
-                  </span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
+
             {transactions.length === 0 && (
               <div style={{ padding: '2rem', textAlign: 'center', color: '#64748b' }}>
                 No recent transactions found.

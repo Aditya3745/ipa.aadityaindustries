@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -11,6 +11,7 @@ import Products from './pages/Products';
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
 import ProtectedRoute from './components/ProtectedRoute';
+import { subscribeToPush } from './utils/pushService';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -24,6 +25,15 @@ const queryClient = new QueryClient({
 function App() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const toggleDrawer = () => setIsDrawerOpen(!isDrawerOpen);
+
+  // Auto-subscribe to push notifications (works without login)
+  useEffect(() => {
+    // Small delay so user sees the app first before permission prompt
+    const timer = setTimeout(() => {
+      subscribeToPush().catch(console.error);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

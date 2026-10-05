@@ -100,42 +100,34 @@ export const SellModule = ({
               index={idx}
               icon={TrendingUp}
               iconColor="#ec4899"
-              title={s.customer_name}
-              subtitle={`Inv: ${s.sale_id} | ${(s.sale_date || s.created_at || '').split('T')[0]}`}
+              title={s.customer_name || 'Customer'}
+              subtitle={`Inv: ${s.sale_id} • ${(s.sale_date || s.created_at || '').split('T')[0]}`}
               status={isFullyPaid ? 'Payment Done' : (paid > 0 ? 'Partial' : 'Pending')}
               statusColor={isFullyPaid ? '#10b981' : (paid > 0 ? '#3b82f6' : '#f59e0b')}
               onEdit={() => { setEditTransactionData(s); setCurrentView('create_sale'); }}
               action={
-                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '0.5rem', width: '100%', justifyContent: 'flex-end' }}>
                   <button 
                     onClick={(e) => { e.stopPropagation(); printSingleSale(s); }} 
-                    style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '4px 8px', color: '#64748b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.7rem' }}
+                    style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '6px 12px', color: '#334155', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.775rem', fontWeight: 600 }}
                   >
-                    <Printer size={12} /> Print Bill
+                    <Printer size={14} /> Print Bill
                   </button>
-                  {!isFullyPaid ? (
+                  {!isFullyPaid && (
                     <button 
                       onClick={(e) => { e.stopPropagation(); handleOpenPayDue(s); }} 
-                      style={{ background: '#3b82f6', border: 'none', borderRadius: '6px', padding: '4px 8px', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.7rem', fontWeight: 'bold' }}
+                      style={{ background: '#2563eb', border: 'none', borderRadius: '6px', padding: '6px 12px', color: 'white', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.775rem', fontWeight: 'bold', boxShadow: '0 2px 4px rgba(37,99,235,0.2)' }}
                     >
-                      <IndianRupee size={12} /> Pay Due
+                      <IndianRupee size={14} /> Pay Due
                     </button>
-                  ) : (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', color: '#16a34a', fontSize: '0.75rem', fontWeight: 700, padding: '3px 8px', backgroundColor: '#f0fdf4', borderRadius: '6px' }}>
-                      <CheckCircle2 size={13} /> Payment Done
-                    </span>
                   )}
                 </div>
               }
               details={[
                 { label: 'Total', value: `₹${grandTotal.toFixed(2)}` },
                 { label: 'Paid', value: `₹${paid.toFixed(2)}`, color: '#10b981' },
-                {
-                  label: isFullyPaid ? 'Status' : 'Due',
-                  value: isFullyPaid ? 'Payment Done' : `₹${due.toFixed(2)}`,
-                  color: isFullyPaid ? '#10b981' : '#ef4444'
-                },
-                { label: 'Delivery', value: s.order_status || 'Pending', color: s.order_status === 'Delivered' ? '#10b981' : '#f59e0b' }
+                { label: 'Due', value: `₹${due.toFixed(2)}`, color: due > 0 ? '#ef4444' : '#10b981' },
+                { label: 'Delivery', value: s.order_status || 'Delivered', color: s.order_status === 'Delivered' ? '#10b981' : '#f59e0b' }
               ]}
             />
           );

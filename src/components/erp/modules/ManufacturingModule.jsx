@@ -9,13 +9,20 @@ import { cardStyle, inputStyle, labelStyle, gridStyle3 } from '../../../styles/f
 import toast from 'react-hot-toast';
 
 export const ManufacturingModule = ({ manufacturing = [], setModalConfig, onRefresh }) => {
+  const [selectedOrderForCompletion, setSelectedOrderForCompletion] = useState(null);
+  const [producedQtyInput, setProducedQtyInput] = useState('');
   const [completingId, setCompletingId] = useState(null);
 
-  const handleMarkComplete = async (m) => {
-    const defaultQty = m.quantity_to_produce || 1;
-    const qtyStr = window.prompt(`Confirm produced quantity for order ${m.manufacturing_id}:`, defaultQty);
-    if (!qtyStr) return;
-    const qty = Number(qtyStr);
+  const openCompletionModal = (m) => {
+    setSelectedOrderForCompletion(m);
+    setProducedQtyInput(String(m.quantity_to_produce || 1));
+  };
+
+  const handleConfirmComplete = async () => {
+    const m = selectedOrderForCompletion;
+    if (!m) return;
+
+    const qty = Number(producedQtyInput);
     if (isNaN(qty) || qty <= 0) {
       toast.error("Please enter a valid quantity.");
       return;
@@ -66,6 +73,7 @@ export const ManufacturingModule = ({ manufacturing = [], setModalConfig, onRefr
       }
 
       toast.success(`Order ${m.manufacturing_id} marked as Completed! Stock updated (+${qty}).`);
+      setSelectedOrderForCompletion(null);
       if (onRefresh) onRefresh();
     } catch (err) {
       console.error("Mark complete failed:", err);
@@ -103,7 +111,7 @@ export const ManufacturingModule = ({ manufacturing = [], setModalConfig, onRefr
             action={
               m.status !== 'Completed' && (
                 <button
-                  onClick={() => handleMarkComplete(m)}
+                  onClick={() => openCompletionModal(m)}
                   disabled={completingId === m.manufacturing_id}
                   style={{
                     background: '#10b981',
@@ -132,6 +140,49 @@ export const ManufacturingModule = ({ manufacturing = [], setModalConfig, onRefr
         ))}
       </div>
       {manufacturing.length === 0 && <p style={{ padding: '1rem', color: '#64748b' }}>No manufacturing orders found.</p>}
+
+      {/* Custom Completion Quantity Modal */}
+      {selectedOrderForCompletion && (
+        <ModalWrapper
+          title={`Confirm Completion — ${selectedOrderForCompletion.manufacturing_id}`}
+          onClose={() => setSelectedOrderForCompletion(null)}
+          maxWidth="450px"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <p style={{ margin: 0, fontSize: '0.875rem', color: '#475569' }}>
+              Product: <strong>{selectedOrderForCompletion.products?.product_name || selectedOrderForCompletion.product_id}</strong>
+            </p>
+            <div>
+              <label style={labelStyle}>Produced Quantity *</label>
+              <input
+                type="number"
+                min="1"
+                style={inputStyle}
+                value={producedQtyInput}
+                onChange={e => setProducedQtyInput(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+              <button
+                type="button"
+                onClick={() => setSelectedOrderForCompletion(null)}
+                style={{ padding: '0.5rem 1.25rem', border: '1px solid #cbd5e1', background: 'white', borderRadius: '6px', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmComplete}
+                disabled={completingId !== null}
+                style={{ padding: '0.5rem 1.25rem', border: 'none', background: '#10b981', color: 'white', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
+              >
+                {completingId ? 'Saving...' : 'Confirm & Complete'}
+              </button>
+            </div>
+          </div>
+        </ModalWrapper>
+      )}
     </div>
   );
 };

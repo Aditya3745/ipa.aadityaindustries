@@ -32,7 +32,7 @@ const DataCard = ({
       }}
     >
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem', marginBottom: '1.25rem' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', marginBottom: '1.25rem' }}>
         {Icon && (
           <div style={{
             width: '40px',
@@ -52,6 +52,7 @@ const DataCard = ({
           <h3 style={{ 
             margin: '0 0 0.25rem 0', 
             fontSize: '1rem', 
+            fontWeight: '600',
             color: '#0f172a',
             whiteSpace: 'nowrap',
             overflow: 'hidden',
@@ -60,38 +61,34 @@ const DataCard = ({
             {title}
           </h3>
           {subtitle && (
-            <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>
+            <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {subtitle}
             </p>
           )}
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem' }}>
-          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            {onEdit && (
-              <button 
-                onClick={onEdit}
-                style={{ background: 'none', border: 'none', padding: '4px', cursor: 'pointer', color: '#94a3b8', display: 'flex' }}
-                title="Edit"
-              >
-                <Edit2 size={16} />
-              </button>
-            )}
-            {status && (
-              <div style={{
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexShrink: 0 }}>
+          {onEdit && (
+            <button 
+              onClick={onEdit}
+              style={{ background: 'none', border: 'none', padding: '4px', cursor: 'pointer', color: '#94a3b8', display: 'flex' }}
+              title="Edit"
+            >
+              <Edit2 size={16} />
+            </button>
+          )}
+          {status && (
+            <div style={{
               padding: '4px 10px',
               borderRadius: '12px',
               fontSize: '0.75rem',
               fontWeight: '600',
               backgroundColor: statusColor ? `${statusColor}15` : '#f1f5f9',
               color: statusColor || '#475569',
+              whiteSpace: 'nowrap'
             }}>
               {status}
             </div>
-            )}
-          </div>
-          {action && (
-            <div>{action}</div>
           )}
         </div>
       </div>
@@ -100,8 +97,8 @@ const DataCard = ({
       {details.length > 0 && (
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
-          gap: '1rem',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))',
+          gap: '0.75rem',
           borderTop: '1px solid #f1f5f9',
           paddingTop: '1rem',
           marginTop: 'auto'
@@ -111,11 +108,27 @@ const DataCard = ({
               <span style={{ fontSize: '0.7rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 {detail.label}
               </span>
-              <span style={{ fontSize: '0.9rem', color: detail.color || '#1e293b', fontWeight: '500' }}>
+              <span style={{ fontSize: '0.875rem', color: detail.color || '#1e293b', fontWeight: '600' }}>
                 {detail.value || '-'}
               </span>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Action Footer (Full Width) */}
+      {action && (
+        <div style={{
+          marginTop: '1rem',
+          paddingTop: '0.85rem',
+          borderTop: '1px solid #f1f5f9',
+          display: 'flex',
+          justifyContent: 'flex-end',
+          alignItems: 'center',
+          gap: '0.5rem',
+          flexWrap: 'wrap'
+        }}>
+          {action}
         </div>
       )}
     </motion.div>

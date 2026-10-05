@@ -16,6 +16,7 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
   const [manualName, setManualName] = useState('');
   const [manualGst, setManualGst] = useState('');
   const [withoutGst, setWithoutGst] = useState(false);
+  const [billType, setBillType] = useState('pakka'); // 'pakka' | 'kacha'
   const [cart, setCart] = useState([]);
 
   // Item Entry State
@@ -117,7 +118,7 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
   const igstTotal = withoutGst ? 0 : cart.reduce((sum, item) => sum + (item.total_price * (item.igst || 0) / 100), 0);
   const taxTotal = cgstTotal + sgstTotal + igstTotal;
   const grandTotal = subtotal + taxTotal - Number(discount) + Number(transport);
-  const currentAmountPaid = editData 
+  const currentAmountPaid = editData
     ? (Number(editData.amount_paid || 0) + (Number(advance) - Number(editData.advance_amount || 0)))
     : Number(advance);
   const dues = grandTotal - currentAmountPaid;
@@ -137,6 +138,11 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
       saleId = await generateId('SALE_ID', 'AIND/SALE/');
     }
 
+    const isKachaBill = billType === 'kacha';
+    const formattedNotes = isKachaBill && !notes.includes('[Kacha Bill]')
+      ? (notes ? `${notes} [Kacha Bill]` : '[Kacha Bill]')
+      : notes;
+
     const saleData = {
       sale_id: saleId,
       invoice_no: invoiceNo || saleId,
@@ -150,9 +156,9 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
       delivery_date: deliveryDate || null,
       total_amount: subtotal,
       discount: Number(discount),
-      cgst: cgstTotal,
-      sgst: sgstTotal,
-      igst: igstTotal,
+      cgst: isKachaBill ? 0 : cgstTotal,
+      sgst: isKachaBill ? 0 : sgstTotal,
+      igst: isKachaBill ? 0 : igstTotal,
       transport: Number(transport),
       grand_total: grandTotal,
       advance_amount: Number(advance),
@@ -160,7 +166,7 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
       payment_method: payMethod,
       order_status: orderStatus,
       amount_paid: currentAmountPaid,
-      notes
+      notes: formattedNotes
     };
 
     try {
@@ -202,7 +208,7 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
 
       // Update customer balance based on dues difference
       const oldDues = editData ? (editData.grand_total - (editData.amount_paid || editData.advance_amount || 0)) : 0;
-      
+
       if (editData && (editData.customer_id !== selectedCustomer.customer_id && editData.customer_name !== selectedCustomer.cust_comp_name)) {
         // Fetch old customer and revert their dues
         let oldCustomerQuery = supabase.from('customers').select('customer_balance');
@@ -351,6 +357,57 @@ const CreateSaleForm = ({ onBack, onSuccess, editData }) => {
           )}
 
           <h3 style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem', marginBottom: '1rem', marginTop: '2rem' }}>2. Order Details</h3>
+
+          {/* Bill Type Selector */}
+          <div style={{ marginBottom: '1.25rem' }}>
+            <label style={labelStyle}>Bill Type</label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setBillType('pakka');
+                  setWithoutGst(false);
+                }}
+                style={{
+                  padding: '0.75rem',
+                  borderRadius: '8px',
+                  border: billType === 'pakka' ? '2px solid #0284c7' : '1px solid #cbd5e1',
+                  backgroundColor: billType === 'pakka' ? '#f0f9ff' : 'white',
+                  color: billType === 'pakka' ? '#0369a1' : '#475569',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <div style={{ fontSize: '0.9rem' }}>🧾 Pakka GST Bill</div>
+                <div style={{ fontSize: '0.75rem', fontWeight: 'normal', color: '#64748b' }}>Tax Invoice with GSTIN & Taxes</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setBillType('kacha');
+                  setWithoutGst(true);
+                }}
+                style={{
+                  padding: '0.75rem',
+                  borderRadius: '8px',
+                  border: billType === 'kacha' ? '2px solid #d97706' : '1px solid #cbd5e1',
+                  backgroundColor: billType === 'kacha' ? '#fffbeb' : 'white',
+                  color: billType === 'kacha' ? '#b45309' : '#475569',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <div style={{ fontSize: '0.9rem' }}>📝 Kacha Bill (Estimate)</div>
+                <div style={{ fontSize: '0.75rem', fontWeight: 'normal', color: '#64748b' }}>Cash Memo without GST details</div>
+              </button>
+            </div>
+          </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
             <div>
               <label style={labelStyle}>Invoice No (Optional)</label>
