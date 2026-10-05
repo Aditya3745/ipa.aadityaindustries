@@ -3,22 +3,24 @@ import { supabase } from '../../../supabase';
 import {
   PhoneCall, Plus, Bell, CheckCircle, XCircle, Clock, AlertTriangle,
   Edit2, Trash2, RefreshCw, MessageSquare, User, X, Package,
-  ShoppingCart, Send, Calculator
+  ShoppingCart, Send, Calculator, FileText
 } from 'lucide-react';
 import ModalWrapper from '../../ModalWrapper';
 import FormActions from '../../FormActions';
 import { cardStyle, inputStyle, labelStyle, gridStyle3 } from '../../../styles/formStyles';
 import toast from 'react-hot-toast';
 import { scheduleDailyFollowUpReminder, requestNotificationPermission } from '../../../utils/notificationService';
+import { generateIndividualInvoicePDF } from '../../../utils/pdfGenerator';
 import RateCalculatorModal from './RateCalculatorModal';
 
 const STATUS_CONFIG = {
-  aayega:      { label: 'Aayega',      color: '#10b981', bg: '#ecfdf5', icon: CheckCircle },
-  nahi_aayega: { label: 'Nahi Aayega', color: '#ef4444', bg: '#fef2f2', icon: XCircle    },
   pending:     { label: 'Pending',     color: '#f59e0b', bg: '#fffbeb', icon: Clock       },
+  quote_sent:  { label: 'Quote Sent',  color: '#8b5cf6', bg: '#f3e8ff', icon: FileText    },
+  aayega:      { label: 'Aayega',      color: '#10b981', bg: '#ecfdf5', icon: CheckCircle },
   confirmed:   { label: 'Confirmed',   color: '#3b82f6', bg: '#eff6ff', icon: CheckCircle },
+  nahi_aayega: { label: 'Nahi Aayega', color: '#ef4444', bg: '#fef2f2', icon: XCircle    },
 };
-const FILTER_OPTIONS = ['all', 'pending', 'aayega', 'confirmed', 'nahi_aayega', 'today', 'overdue'];
+const FILTER_OPTIONS = ['all', 'pending', 'quote_sent', 'aayega', 'confirmed', 'nahi_aayega', 'today', 'overdue'];
 const todayStr = () => new Date().toISOString().split('T')[0];
 const daysDiff = (d) => { if (!d) return null; return Math.ceil((new Date(d) - new Date(todayStr())) / 86400000); };
 const formatDate = (d) => { if (!d) return '---'; return new Date(d + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }); };
@@ -72,7 +74,7 @@ const dLbl = { display: 'block', fontSize: '0.68rem', color: '#94a3b8', fontWeig
 const dVal = { display: 'block', fontSize: '0.88rem', fontWeight: 700, color: '#0f172a' };
 
 // ── Follow-up Card ────────────────────────────────────────────────
-const FollowUpCard = ({ item, onEdit, onDelete, onStatusChange, onConvertToSale }) => {
+const FollowUpCard = ({ item, onEdit, onDelete, onStatusChange, onConvertToSale, onGenerateQuotation }) => {
   const cfg  = STATUS_CONFIG[item.status] || STATUS_CONFIG.pending;
   const SI   = cfg.icon;
   const t    = todayStr();
@@ -170,13 +172,20 @@ const FollowUpCard = ({ item, onEdit, onDelete, onStatusChange, onConvertToSale 
       <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', borderTop: '1px solid #f1f5f9', paddingTop: '0.65rem' }}>
         {/* WhatsApp */}
         <button onClick={() => openWhatsApp(item)}
-          style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', padding: '0.45rem 0.6rem', background: '#ecfdf5', border: '1px solid #6ee7b7', borderRadius: '8px', cursor: 'pointer', color: '#059669', fontSize: '0.78rem', fontWeight: 700 }}>
+          style={{ flex: 1, minWidth: '90px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', padding: '0.45rem 0.6rem', background: '#ecfdf5', border: '1px solid #6ee7b7', borderRadius: '8px', cursor: 'pointer', color: '#059669', fontSize: '0.78rem', fontWeight: 700 }}>
           <Send size={13} /> WhatsApp
         </button>
+        {/* Quote PDF */}
+        {items.length > 0 && (
+          <button onClick={() => onGenerateQuotation(item)}
+            style={{ flex: 1, minWidth: '90px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', padding: '0.45rem 0.6rem', background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: '8px', cursor: 'pointer', color: '#b45309', fontSize: '0.78rem', fontWeight: 700 }}>
+            <FileText size={13} /> Quote PDF
+          </button>
+        )}
         {/* Convert to Sale */}
         {items.length > 0 && item.status !== 'nahi_aayega' && (
           <button onClick={() => onConvertToSale(item)}
-            style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', padding: '0.45rem 0.6rem', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '8px', cursor: 'pointer', color: '#1d4ed8', fontSize: '0.78rem', fontWeight: 700 }}>
+            style={{ flex: 1, minWidth: '90px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', padding: '0.45rem 0.6rem', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '8px', cursor: 'pointer', color: '#1d4ed8', fontSize: '0.78rem', fontWeight: 700 }}>
             <ShoppingCart size={13} /> Convert to Sale
           </button>
         )}
@@ -231,6 +240,53 @@ export const FollowUpModule = ({ customers = [], products = [], onRefresh, setCu
     if (error) { toast.error('Delete failed'); return; }
     toast.success('Deleted');
     setFollowups(prev => prev.filter(f => f.id !== id));
+  };
+
+  // ── Generate Quotation PDF ─────────────────────────────────────────
+  const handleGenerateQuotation = async (item) => {
+    try {
+      toast.loading("Generating Quotation PDF...", { id: "quote-toast" });
+      const customer = customers.find(c => c.cust_comp_name === item.customer_name);
+      const items = Array.isArray(item.items) ? item.items : [];
+      const totalPrice = items.reduce((sum, it) => sum + (Number(it.unit_price || 0) * Number(it.quantity || 1)), 0);
+
+      const mappedData = {
+        id: item.id ? `EST-${String(item.id).slice(-6).toUpperCase()}` : `EST-${Date.now().toString().slice(-6)}`,
+        sale_id: item.id ? `EST-${String(item.id).slice(-6).toUpperCase()}` : `EST-${Date.now().toString().slice(-6)}`,
+        customer_name: item.customer_name,
+        customer_phone: item.contact_number,
+        customer_gst_no: customer?.cust_gst_no || null,
+        sale_date: todayStr(),
+        expected_date: item.expected_date,
+        grand_total: totalPrice,
+        amount_paid: 0,
+        advance_amount: 0,
+        dues: totalPrice,
+        notes: item.notes || 'Quotation Estimate from Aaditya Industries'
+      };
+
+      const mappedItems = items.map(it => {
+        const prod = products.find(p => p.product_id === it.product_id);
+        const uPrice = Number(it.unit_price) > 0 ? Number(it.unit_price) : (prod?.selling_rate || prod?.price || 0);
+        return {
+          product_name: it.product_name,
+          quantity: Number(it.quantity) || 1,
+          unit_price: uPrice,
+          total_price: uPrice * (Number(it.quantity) || 1),
+          hsn_code: prod?.hsn_code || '9401'
+        };
+      });
+
+      await generateIndividualInvoicePDF('sale', mappedData, mappedItems, true, [], true);
+      toast.success("Quotation PDF generated successfully!", { id: "quote-toast" });
+
+      if (item.status === 'pending') {
+        handleStatusChange(item.id, 'quote_sent');
+      }
+    } catch (err) {
+      console.error("Failed to generate quote PDF", err);
+      toast.error("Failed to generate Quotation PDF", { id: "quote-toast" });
+    }
   };
 
   // ── Convert to Sale ──────────────────────────────────────────────
@@ -288,7 +344,18 @@ export const FollowUpModule = ({ customers = [], products = [], onRefresh, setCu
 
   const stats = useMemo(() => {
     const t = todayStr();
-    return { total: followups.length, today: followups.filter(f => f.next_followup_date === t).length, overdue: followups.filter(f => f.next_followup_date && f.next_followup_date < t && f.status !== 'nahi_aayega').length, aayega: followups.filter(f => f.status === 'aayega').length };
+    const totalPipelineValue = followups.reduce((acc, f) => {
+      const items = Array.isArray(f.items) ? f.items : [];
+      return acc + items.reduce((sum, it) => sum + (Number(it.unit_price || 0) * Number(it.quantity || 1)), 0);
+    }, 0);
+
+    return {
+      total: followups.length,
+      today: followups.filter(f => f.next_followup_date === t).length,
+      overdue: followups.filter(f => f.next_followup_date && f.next_followup_date < t && f.status !== 'nahi_aayega').length,
+      aayega: followups.filter(f => f.status === 'aayega' || f.status === 'confirmed').length,
+      pipelineValue: totalPipelineValue
+    };
   }, [followups]);
 
   return (
@@ -307,9 +374,9 @@ export const FollowUpModule = ({ customers = [], products = [], onRefresh, setCu
       <AlertBanner followups={followups} onEnableNotifications={handleEnableNotifications} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
-        {[{ label:'Total', value:stats.total, color:'#6366f1', bg:'#eef2ff' },{ label:'Aaj Call', value:stats.today, color:'#d97706', bg:'#fffbeb' },{ label:'Overdue', value:stats.overdue, color:'#ef4444', bg:'#fef2f2' },{ label:'Aayega', value:stats.aayega, color:'#10b981', bg:'#ecfdf5' }].map(s => (
+        {[{ label:'Total', value:stats.total, color:'#6366f1', bg:'#eef2ff' },{ label:'Aaj Call', value:stats.today, color:'#d97706', bg:'#fffbeb' },{ label:'Overdue', value:stats.overdue, color:'#ef4444', bg:'#fef2f2' },{ label:'Aayega/Confirmed', value:stats.aayega, color:'#10b981', bg:'#ecfdf5' },{ label:'Pipeline Value', value:`₹${(stats.pipelineValue/1000).toFixed(1)}k`, color:'#8b5cf6', bg:'#f3e8ff' }].map(s => (
           <div key={s.label} style={{ background: s.bg, border: `1px solid ${s.color}22`, borderRadius: '10px', padding: '0.75rem 1rem', textAlign: 'center' }}>
-            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: s.color }}>{s.value}</div>
+            <div style={{ fontSize: '1.35rem', fontWeight: 800, color: s.color }}>{s.value}</div>
             <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600 }}>{s.label}</div>
           </div>
         ))}
@@ -340,6 +407,7 @@ export const FollowUpModule = ({ customers = [], products = [], onRefresh, setCu
               onDelete={handleDelete}
               onStatusChange={handleStatusChange}
               onConvertToSale={handleConvertToSale}
+              onGenerateQuotation={handleGenerateQuotation}
             />
           ))}
         </div>
