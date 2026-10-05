@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Trash2, RotateCcw, Calculator, Scissors, Check, Layers, Box, CheckSquare } from 'lucide-react';
+import { Plus, Trash2, RotateCcw, Calculator, Scissors, Check, Layers, Box, Lock } from 'lucide-react';
 
 const COLOR_PALETTE = [
   ["#9FE1CB", "#0F6E56", "#04342C"],
@@ -12,18 +12,12 @@ const COLOR_PALETTE = [
   ["#FFE5B4", "#B8860B", "#5C4033"]
 ];
 
-// Feeded Desk Seat Standard Parts
+// Feeded 1 Desk Seat Standard Parts
 const DESK_SEAT_PARTS = [
   { n: "A", w: 1.5, h: 4, f: 1, s: 1 },
   { n: "B", w: 4, h: 2, f: 0, s: 1 },
   { n: "C", w: 2, h: 1.5, f: 0, s: 1 },
   { n: "D", w: 2, h: 0.5, f: 0, s: 2 }
-];
-
-// Feeded Locker Parts (2ft*1ft 4pcs, 1ft*1ft 2pcs)
-const LOCKER_PARTS = [
-  { n: "L1", w: 2, h: 1, f: 0, s: 4 },
-  { n: "L2", w: 1, h: 1, f: 0, s: 2 }
 ];
 
 function ovl(a, b) {
@@ -128,28 +122,30 @@ function cutsSummary(sh) {
 }
 
 export const SeatSetCuttingModule = () => {
-  // Input states
+  // Quantity states
   const [seats, setSeats] = useState(1);
+  const [lockers, setLockers] = useState(0); // Lockers per set
   const [sets, setSets] = useState(1);
   const [sw, setSw] = useState(8);
   const [sh, setSh] = useState(4);
   const [rot, setRot] = useState(true);
 
-  // Parts state & Locker option
+  // Parts state (base desk seat parts)
   const [parts, setParts] = useState(DESK_SEAT_PARTS);
-  const [includeLocker, setIncludeLocker] = useState(false);
 
   // Material selection state (baggas: 33, mdf: 60)
-  const [boardType, setBoardType] = useState('baggas'); // 'baggas' | 'mdf' | 'custom'
+  const [boardType, setBoardType] = useState('baggas');
   const [mr, setMr] = useState(33); // Default Baggas Board rate = ₹33
 
   // Commercial Cost parameters
-  const [mb, setMb] = useState('sheets'); // 'sheets' or 'used'
+  const [mb, setMb] = useState('sheets');
   const [it, setIt] = useState(0);
-  const [em, setEm] = useState(200); // Default Extra material/seat = ₹200
-  const [lab, setLab] = useState(200); // Default Labour cost = ₹200
+  const [em, setEm] = useState(200); // ₹200 per seat
+  const [emLocker, setEmLocker] = useState(200); // ₹200 per locker
+  const [lab, setLab] = useState(200); // ₹200 per seat
+  const [labLocker, setLabLocker] = useState(200); // ₹200 per locker
   const [fx, setFx] = useState(0);
-  const [mg, setMg] = useState(15);
+  const [mg, setMg] = useState(0); // Default Margin = 0%
   const [gst, setGst] = useState(0);
   const [adv, setAdv] = useState(50);
   const [rec, setRec] = useState(0);
@@ -165,49 +161,50 @@ export const SeatSetCuttingModule = () => {
     else if (type === 'mdf') setMr(60);
   };
 
-  // Toggle Locker Option
-  const handleLockerToggle = (e) => {
-    const isChecked = e.target.checked;
-    setIncludeLocker(isChecked);
-    if (isChecked) {
-      // Check if locker parts already exist
-      const existingL1 = parts.some(p => p.n === 'L1');
-      if (!existingL1) {
-        setParts([...parts, ...LOCKER_PARTS]);
-      }
-    } else {
-      // Remove locker parts
-      setParts(parts.filter(p => p.n !== 'L1' && p.n !== 'L2'));
-    }
-  };
-
-  // Calculate items array
-  const buildItems = (S, N) => {
+  // Build items array combining Desk Seat parts + Locker parts separately
+  const buildItems = (S, L, N) => {
     const items = [];
+    // 1. Desk Seat parts
     parts.forEach((p, i) => {
       const q = qty(p, S) * N;
       for (let k = 0; k < q; k++) {
         items.push({ n: p.n, w: Number(p.w) || 0, h: Number(p.h) || 0, c: i });
       }
     });
+    // 2. Separate Locker parts (2'x1' 4pcs, 1'x1' 2pcs per locker)
+    if (L > 0) {
+      const lockerIndex1 = parts.length;
+      const lockerIndex2 = parts.length + 1;
+      // L1: 2'x1' (4 pcs per locker)
+      const qL1 = 4 * L * N;
+      for (let k = 0; k < qL1; k++) {
+        items.push({ n: "L1 (Locker 2′×1′)", w: 2, h: 1, c: lockerIndex1 });
+      }
+      // L2: 1'x1' (2 pcs per locker)
+      const qL2 = 2 * L * N;
+      for (let k = 0; k < qL2; k++) {
+        items.push({ n: "L2 (Locker 1′×1′)", w: 1, h: 1, c: lockerIndex2 });
+      }
+    }
     return items;
   };
 
   // Perform packing & cost calculation
   const calcResults = useMemo(() => {
     const S = Math.max(1, Math.floor(Number(seats) || 1));
+    const L = Math.max(0, Math.floor(Number(lockers) || 0));
     const N = Math.max(1, Math.floor(Number(sets) || 1));
     const W = Math.max(0.1, Number(sw) || 8);
     const H = Math.max(0.1, Number(sh) || 4);
     const sheetArea = W * H;
 
-    const one = bestPacking(buildItems(S, 1), W, H, rot);
+    const one = bestPacking(buildItems(S, L, 1), W, H, rot);
     let list = one.sheets;
     let counts = list.map(() => N);
     let skip = one.skip;
 
     if (N > 1) {
-      const g = bestPacking(buildItems(S, N), W, H, rot);
+      const g = bestPacking(buildItems(S, L, N), W, H, rot);
       if (g.skip === 0 && g.sheets.length < list.length * N) {
         list = g.sheets;
         counts = list.map(() => 1);
@@ -221,7 +218,7 @@ export const SeatSetCuttingModule = () => {
       usedSqFt += area(sheet) * counts[idx];
     });
 
-    const totalPieces = buildItems(S, N).length;
+    const totalPieces = buildItems(S, L, N).length;
     const totalSheetSqFt = nS * sheetArea;
     const leftoverSqFt = Math.max(0, totalSheetSqFt - usedSqFt);
     const usagePercent = totalSheetSqFt > 0 ? (usedSqFt / totalSheetSqFt) * 100 : 0;
@@ -229,12 +226,23 @@ export const SeatSetCuttingModule = () => {
 
     // Financial calculations
     const seatsAll = S * N;
+    const lockersAll = L * N;
+
     const materialRate = Number(mr) || 0;
     const matSqFt = mb === 'used' ? usedSqFt : totalSheetSqFt;
     const matCost = matSqFt * materialRate;
     const importCost = nS * (Number(it) || 0);
-    const extraMatCost = seatsAll * (Number(em) || 0);
-    const labourCost = seatsAll * (Number(lab) || 0);
+
+    // Extra material cost: seats (₹200) + lockers (₹200)
+    const extraMatCostSeat = seatsAll * (Number(em) || 0);
+    const extraMatCostLocker = lockersAll * (Number(emLocker) || 0);
+    const extraMatCost = extraMatCostSeat + extraMatCostLocker;
+
+    // Labour cost: seats (₹200) + lockers (₹200)
+    const labourCostSeat = seatsAll * (Number(lab) || 0);
+    const labourCostLocker = lockersAll * (Number(labLocker) || 0);
+    const labourCost = labourCostSeat + labourCostLocker;
+
     const fixedCost = Number(fx) || 0;
 
     const baseTotalCost = matCost + importCost + extraMatCost + labourCost + fixedCost;
@@ -253,14 +261,16 @@ export const SeatSetCuttingModule = () => {
     const balanceRemaining = totalSellingPrice - Math.max(advanceAsked, advanceRec);
 
     return {
-      S, N, W, H, sheetArea,
+      S, L, N, W, H, sheetArea,
       list, counts, skip, nS,
       totalPieces, usedSqFt, totalSheetSqFt, leftoverSqFt, usagePercent, sqFtPerSeat,
-      seatsAll, materialRate, matSqFt, matCost, importCost, extraMatCost, labourCost, fixedCost,
+      seatsAll, lockersAll, materialRate, matSqFt, matCost, importCost,
+      extraMatCostSeat, extraMatCostLocker, extraMatCost,
+      labourCostSeat, labourCostLocker, labourCost, fixedCost,
       baseTotalCost, marginPerc, marginAmount, subtotal, gstPerc, gstAmount, totalSellingPrice,
       advPerc, advanceAsked, advanceRec, advanceDue, balanceRemaining
     };
-  }, [seats, sets, sw, sh, rot, parts, mr, mb, it, em, lab, fx, mg, gst, adv, rec]);
+  }, [seats, lockers, sets, sw, sh, rot, parts, mr, mb, it, em, emLocker, lab, labLocker, fx, mg, gst, adv, rec]);
 
   const handlePartChange = (idx, key, val) => {
     const updated = [...parts];
@@ -281,20 +291,22 @@ export const SeatSetCuttingModule = () => {
 
   const handleResetDefaults = () => {
     setSeats(1);
+    setLockers(0);
     setSets(1);
     setSw(8);
     setSh(4);
     setRot(true);
     setParts(DESK_SEAT_PARTS);
-    setIncludeLocker(false);
     setBoardType('baggas');
     setMr(33);
     setMb('sheets');
     setIt(0);
     setEm(200);
+    setEmLocker(200);
     setLab(200);
+    setLabLocker(200);
     setFx(0);
-    setMg(15);
+    setMg(0); // Margin default = 0%
     setGst(0);
     setAdv(50);
     setRec(0);
@@ -328,7 +340,7 @@ export const SeatSetCuttingModule = () => {
           {/* Card 1: Sheet & Quantity Config */}
           <div style={cardStyle}>
             <h3 style={{ fontSize: '1rem', color: '#0f172a', margin: '0 0 1rem 0', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Layers size={18} color="#0f6e56" /> Sheet & Set Configuration
+              <Layers size={18} color="#0f6e56" /> Sheet & Quantity Configuration
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
               <div>
@@ -336,29 +348,59 @@ export const SeatSetCuttingModule = () => {
                 <input type="number" min="1" step="1" style={inputStyle} value={seats} onChange={e => setSeats(e.target.value)} />
               </div>
               <div>
+                <label style={labelStyle}>Lockers Per Set</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  style={{ ...inputStyle, backgroundColor: lockers > 0 ? '#f0fdf4' : '#f8fafc', borderColor: lockers > 0 ? '#86efac' : '#cbd5e1', fontWeight: lockers > 0 ? 700 : 400 }}
+                  value={lockers}
+                  onChange={e => setLockers(e.target.value)}
+                />
+              </div>
+              <div>
                 <label style={labelStyle}>Number of Sets</label>
                 <input type="number" min="1" step="1" style={inputStyle} value={sets} onChange={e => setSets(e.target.value)} />
               </div>
               <div>
-                <label style={labelStyle}>Sheet Length (ft)</label>
-                <input type="number" min="0.5" step="0.25" style={inputStyle} value={sw} onChange={e => setSw(e.target.value)} />
-              </div>
-              <div>
-                <label style={labelStyle}>Sheet Width (ft)</label>
-                <input type="number" min="0.5" step="0.25" style={inputStyle} value={sh} onChange={e => setSh(e.target.value)} />
+                <label style={labelStyle}>Sheet Dimensions (L × W)</label>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input type="number" min="0.5" step="0.25" style={inputStyle} value={sw} onChange={e => setSw(e.target.value)} placeholder="Length" />
+                  <input type="number" min="0.5" step="0.25" style={inputStyle} value={sh} onChange={e => setSh(e.target.value)} placeholder="Width" />
+                </div>
               </div>
             </div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1rem', fontSize: '0.875rem', color: '#334155', cursor: 'pointer' }}>
+
+            {/* Quick Locker Toggle Shortcut */}
+            <div style={{ marginTop: '1rem', padding: '0.65rem 0.85rem', backgroundColor: lockers > 0 ? '#f0fdf4' : '#f8fafc', border: `1px solid ${lockers > 0 ? '#bbf7d0' : '#e2e8f0'}`, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <Lock size={16} color={lockers > 0 ? '#166534' : '#64748b'} />
+                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: lockers > 0 ? '#166534' : '#475569' }}>
+                  Locker Option (2′×1′ 4pcs, 1′×1′ 2pcs)
+                </span>
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700, color: '#0f6e56' }}>
+                <input
+                  type="checkbox"
+                  checked={lockers > 0}
+                  onChange={e => setLockers(e.target.checked ? seats : 0)}
+                  style={{ width: '16px', height: '16px', accentColor: '#0f6e56' }}
+                />
+                {lockers > 0 ? 'Enabled' : 'Add Locker'}
+              </label>
+            </div>
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.75rem', fontSize: '0.875rem', color: '#334155', cursor: 'pointer' }}>
               <input type="checkbox" checked={rot} onChange={e => setRot(e.target.checked)} style={{ width: '16px', height: '16px', accentColor: '#0f6e56' }} />
               Allow rotating pieces (90° turn)
             </label>
           </div>
 
-          {/* Card 2: Feeded Desk Seat & Locker Parts */}
+          {/* Card 2: Feeded Desk Seat & Locker Parts Table */}
           <div style={cardStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
               <h3 style={{ fontSize: '1rem', color: '#0f172a', margin: 0, fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Box size={18} color="#0f6e56" /> Feeded Desk Seat & Locker
+                <Box size={18} color="#0f6e56" /> Feeded Desk Seat Parts
               </h3>
               <button
                 onClick={handleAddPart}
@@ -366,23 +408,6 @@ export const SeatSetCuttingModule = () => {
               >
                 <Plus size={14} /> Add Piece
               </button>
-            </div>
-
-            {/* Locker Option Checkbox / Banner */}
-            <div style={{ padding: '0.75rem 1rem', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', marginBottom: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
-                <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#166534', display: 'block' }}>🔐 Locker Option</span>
-                <span style={{ fontSize: '0.75rem', color: '#15803d' }}>Adds 2′×1′ (4 pcs) & 1′×1′ (2 pcs) per seat</span>
-              </div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem', color: '#166534' }}>
-                <input
-                  type="checkbox"
-                  checked={includeLocker}
-                  onChange={handleLockerToggle}
-                  style={{ width: '18px', height: '18px', accentColor: '#16a34a' }}
-                />
-                Include Locker
-              </label>
             </div>
 
             <div style={{ overflowX: 'auto' }}>
@@ -399,13 +424,13 @@ export const SeatSetCuttingModule = () => {
                 </thead>
                 <tbody>
                   {parts.map((p, idx) => (
-                    <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9', backgroundColor: p.n.startsWith('L') ? '#f0fdf4' : 'transparent' }}>
+                    <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
                       <td style={{ padding: '0.35rem 0.25rem' }}>
                         <input
                           type="text"
                           value={p.n}
                           onChange={e => handlePartChange(idx, 'n', e.target.value)}
-                          style={{ width: '60px', padding: '0.3rem', border: '1px solid #cbd5e1', borderRadius: '4px', textAlign: 'center', fontWeight: 600, color: p.n.startsWith('L') ? '#166534' : '#0f172a' }}
+                          style={{ width: '60px', padding: '0.3rem', border: '1px solid #cbd5e1', borderRadius: '4px', textAlign: 'center', fontWeight: 600 }}
                         />
                       </td>
                       <td style={{ padding: '0.35rem 0.25rem' }}>
@@ -463,8 +488,18 @@ export const SeatSetCuttingModule = () => {
                 </tbody>
               </table>
             </div>
+
+            {/* Separate Locker Parts Preview (if Locker Qty > 0) */}
+            {calcResults.L > 0 && (
+              <div style={{ marginTop: '0.75rem', padding: '0.65rem 0.75rem', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', fontSize: '0.8rem', color: '#166534' }}>
+                <strong>🔐 Separate Locker Parts ({calcResults.L * calcResults.N} Lockers total):</strong>
+                <div style={{ marginTop: '0.2rem' }}>• L1 (2′ × 1′): {4 * calcResults.L * calcResults.N} pcs ({4 * calcResults.L} per set)</div>
+                <div>• L2 (1′ × 1′): {2 * calcResults.L * calcResults.N} pcs ({2 * calcResults.L} per set)</div>
+              </div>
+            )}
+
             <div style={{ marginTop: '0.75rem', fontSize: '0.775rem', color: '#64748b', background: '#f8fafc', padding: '0.5rem 0.75rem', borderRadius: '6px' }}>
-              For {calcResults.S} seat{calcResults.S > 1 ? 's' : ''}: {parts.map(p => `${qty(p, calcResults.S)} × ${p.n}`).join(', ')}
+              For {calcResults.S} seat{calcResults.S > 1 ? 's' : ''}{calcResults.L > 0 ? ` + ${calcResults.L} locker${calcResults.L > 1 ? 's' : ''}` : ''}: {parts.map(p => `${qty(p, calcResults.S)} × ${p.n}`).join(', ')}{calcResults.L > 0 ? `, ${4 * calcResults.L} × L1, ${2 * calcResults.L} × L2` : ''}
             </div>
           </div>
 
@@ -551,14 +586,27 @@ export const SeatSetCuttingModule = () => {
                   <option value="used">Only Sq Ft Used</option>
                 </select>
               </div>
+
+              {/* Extra Material Inputs */}
+              <div>
+                <label style={labelStyle}>Extra Material (/seat)</label>
+                <input type="number" min="0" style={inputStyle} value={em} onChange={e => setEm(e.target.value)} />
+              </div>
+              <div>
+                <label style={labelStyle}>Extra Material (/locker)</label>
+                <input type="number" min="0" style={inputStyle} value={emLocker} onChange={e => setEmLocker(e.target.value)} />
+              </div>
+
+              {/* Labour Cost Inputs */}
               <div>
                 <label style={labelStyle}>Labour Cost (/seat)</label>
                 <input type="number" min="0" style={inputStyle} value={lab} onChange={e => setLab(e.target.value)} />
               </div>
               <div>
-                <label style={labelStyle}>Extra Material (/seat)</label>
-                <input type="number" min="0" style={inputStyle} value={em} onChange={e => setEm(e.target.value)} />
+                <label style={labelStyle}>Labour Cost (/locker)</label>
+                <input type="number" min="0" style={inputStyle} value={labLocker} onChange={e => setLabLocker(e.target.value)} />
               </div>
+
               <div>
                 <label style={labelStyle}>Import Transport (/sheet)</label>
                 <input type="number" min="0" style={inputStyle} value={it} onChange={e => setIt(e.target.value)} />
@@ -568,7 +616,7 @@ export const SeatSetCuttingModule = () => {
                 <input type="number" min="0" style={inputStyle} value={fx} onChange={e => setFx(e.target.value)} />
               </div>
               <div>
-                <label style={labelStyle}>Your Margin %</label>
+                <label style={labelStyle}>Your Margin % (Default 0%)</label>
                 <input type="number" min="0" style={inputStyle} value={mg} onChange={e => setMg(e.target.value)} />
               </div>
               <div>
@@ -705,7 +753,7 @@ export const SeatSetCuttingModule = () => {
             })}
           </div>
 
-          {/* Complete Breakdown Table */}
+          {/* Complete Commercial Breakdown Table */}
           <div style={cardStyle}>
             <h3 style={{ fontSize: '1rem', color: '#0f172a', margin: '0 0 1rem 0', fontWeight: 700, borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem' }}>
               Full Commercial Breakdown
@@ -721,14 +769,25 @@ export const SeatSetCuttingModule = () => {
                   <b>{mFmt(calcResults.importCost)}</b>
                 </div>
               )}
+
+              {/* Extra Material Detailed Breakdown */}
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.25rem 0', borderBottom: '1px dashed #e2e8f0' }}>
-                <span>Extra Material ({calcResults.seatsAll} seats × {mFmt(em)})</span>
+                <span>
+                  Extra Material ({calcResults.seatsAll} seats × {mFmt(em)}
+                  {calcResults.lockersAll > 0 ? ` + ${calcResults.lockersAll} lockers × ${mFmt(emLocker)}` : ''})
+                </span>
                 <b>{mFmt(calcResults.extraMatCost)}</b>
               </div>
+
+              {/* Labour Cost Detailed Breakdown */}
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.25rem 0', borderBottom: '1px dashed #e2e8f0' }}>
-                <span>Labour Cost ({calcResults.seatsAll} seats × {mFmt(lab)})</span>
+                <span>
+                  Labour Cost ({calcResults.seatsAll} seats × {mFmt(lab)}
+                  {calcResults.lockersAll > 0 ? ` + ${calcResults.lockersAll} lockers × ${mFmt(labLocker)}` : ''})
+                </span>
                 <b>{mFmt(calcResults.labourCost)}</b>
               </div>
+
               {calcResults.fixedCost > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.25rem 0', borderBottom: '1px dashed #e2e8f0' }}>
                   <span>Other Fixed Cost</span>
