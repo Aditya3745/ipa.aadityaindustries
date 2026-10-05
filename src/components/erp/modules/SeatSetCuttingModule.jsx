@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Trash2, RotateCcw, Calculator, Scissors, Check, DollarSign, Layers } from 'lucide-react';
+import { Plus, Trash2, RotateCcw, Calculator, Scissors, Check, Layers, Box, CheckSquare } from 'lucide-react';
 
 const COLOR_PALETTE = [
   ["#9FE1CB", "#0F6E56", "#04342C"],
@@ -7,14 +7,23 @@ const COLOR_PALETTE = [
   ["#F5C4B3", "#993C1D", "#4A1B0C"],
   ["#FAC775", "#854F0B", "#412402"],
   ["#B5D4F4", "#185FA5", "#042C53"],
-  ["#C0DD97", "#3B6D11", "#173404"]
+  ["#C0DD97", "#3B6D11", "#173404"],
+  ["#F3B0C3", "#AB4766", "#521A2A"],
+  ["#FFE5B4", "#B8860B", "#5C4033"]
 ];
 
-const DEFAULT_PARTS = [
+// Feeded Desk Seat Standard Parts
+const DESK_SEAT_PARTS = [
   { n: "A", w: 1.5, h: 4, f: 1, s: 1 },
-  { n: "C", w: 4, h: 2, f: 0, s: 1 },
-  { n: "D", w: 2, h: 1.5, f: 0, s: 1 },
-  { n: "E", w: 2, h: 0.5, f: 0, s: 2 }
+  { n: "B", w: 4, h: 2, f: 0, s: 1 },
+  { n: "C", w: 2, h: 1.5, f: 0, s: 1 },
+  { n: "D", w: 2, h: 0.5, f: 0, s: 2 }
+];
+
+// Feeded Locker Parts (2ft*1ft 4pcs, 1ft*1ft 2pcs)
+const LOCKER_PARTS = [
+  { n: "L1", w: 2, h: 1, f: 0, s: 4 },
+  { n: "L2", w: 1, h: 1, f: 0, s: 2 }
 ];
 
 function ovl(a, b) {
@@ -126,15 +135,19 @@ export const SeatSetCuttingModule = () => {
   const [sh, setSh] = useState(4);
   const [rot, setRot] = useState(true);
 
-  // Parts state
-  const [parts, setParts] = useState(DEFAULT_PARTS);
+  // Parts state & Locker option
+  const [parts, setParts] = useState(DESK_SEAT_PARTS);
+  const [includeLocker, setIncludeLocker] = useState(false);
 
-  // Cost & Advance parameters
-  const [mr, setMr] = useState(75);
+  // Material selection state (baggas: 33, mdf: 60)
+  const [boardType, setBoardType] = useState('baggas'); // 'baggas' | 'mdf' | 'custom'
+  const [mr, setMr] = useState(33); // Default Baggas Board rate = ₹33
+
+  // Commercial Cost parameters
   const [mb, setMb] = useState('sheets'); // 'sheets' or 'used'
   const [it, setIt] = useState(0);
-  const [em, setEm] = useState(300);
-  const [lab, setLab] = useState(1500);
+  const [em, setEm] = useState(200); // Default Extra material/seat = ₹200
+  const [lab, setLab] = useState(200); // Default Labour cost = ₹200
   const [fx, setFx] = useState(0);
   const [mg, setMg] = useState(15);
   const [gst, setGst] = useState(0);
@@ -144,6 +157,29 @@ export const SeatSetCuttingModule = () => {
   const cardStyle = { backgroundColor: 'white', padding: '1.5rem', borderRadius: '12px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)', marginBottom: '1.5rem' };
   const inputStyle = { width: '100%', padding: '0.6rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '0.9rem', backgroundColor: '#f8fafc', color: '#0f172a' };
   const labelStyle = { display: 'block', fontSize: '0.775rem', fontWeight: 600, color: '#475569', marginBottom: '0.35rem' };
+
+  // Handle Material Board Selector
+  const handleBoardSelect = (type) => {
+    setBoardType(type);
+    if (type === 'baggas') setMr(33);
+    else if (type === 'mdf') setMr(60);
+  };
+
+  // Toggle Locker Option
+  const handleLockerToggle = (e) => {
+    const isChecked = e.target.checked;
+    setIncludeLocker(isChecked);
+    if (isChecked) {
+      // Check if locker parts already exist
+      const existingL1 = parts.some(p => p.n === 'L1');
+      if (!existingL1) {
+        setParts([...parts, ...LOCKER_PARTS]);
+      }
+    } else {
+      // Remove locker parts
+      setParts(parts.filter(p => p.n !== 'L1' && p.n !== 'L2'));
+    }
+  };
 
   // Calculate items array
   const buildItems = (S, N) => {
@@ -249,12 +285,14 @@ export const SeatSetCuttingModule = () => {
     setSw(8);
     setSh(4);
     setRot(true);
-    setParts(DEFAULT_PARTS);
-    setMr(75);
+    setParts(DESK_SEAT_PARTS);
+    setIncludeLocker(false);
+    setBoardType('baggas');
+    setMr(33);
     setMb('sheets');
     setIt(0);
-    setEm(300);
-    setLab(1500);
+    setEm(200);
+    setLab(200);
     setFx(0);
     setMg(15);
     setGst(0);
@@ -316,11 +354,11 @@ export const SeatSetCuttingModule = () => {
             </label>
           </div>
 
-          {/* Card 2: Parts Table */}
+          {/* Card 2: Feeded Desk Seat & Locker Parts */}
           <div style={cardStyle}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <h3 style={{ fontSize: '1rem', color: '#0f172a', margin: 0, fontWeight: 700 }}>
-                Pieces Specification
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <h3 style={{ fontSize: '1rem', color: '#0f172a', margin: 0, fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Box size={18} color="#0f6e56" /> Feeded Desk Seat & Locker
               </h3>
               <button
                 onClick={handleAddPart}
@@ -328,6 +366,23 @@ export const SeatSetCuttingModule = () => {
               >
                 <Plus size={14} /> Add Piece
               </button>
+            </div>
+
+            {/* Locker Option Checkbox / Banner */}
+            <div style={{ padding: '0.75rem 1rem', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', marginBottom: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#166534', display: 'block' }}>🔐 Locker Option</span>
+                <span style={{ fontSize: '0.75rem', color: '#15803d' }}>Adds 2′×1′ (4 pcs) & 1′×1′ (2 pcs) per seat</span>
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem', color: '#166534' }}>
+                <input
+                  type="checkbox"
+                  checked={includeLocker}
+                  onChange={handleLockerToggle}
+                  style={{ width: '18px', height: '18px', accentColor: '#16a34a' }}
+                />
+                Include Locker
+              </label>
             </div>
 
             <div style={{ overflowX: 'auto' }}>
@@ -344,13 +399,13 @@ export const SeatSetCuttingModule = () => {
                 </thead>
                 <tbody>
                   {parts.map((p, idx) => (
-                    <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9', backgroundColor: p.n.startsWith('L') ? '#f0fdf4' : 'transparent' }}>
                       <td style={{ padding: '0.35rem 0.25rem' }}>
                         <input
                           type="text"
                           value={p.n}
                           onChange={e => handlePartChange(idx, 'n', e.target.value)}
-                          style={{ width: '50px', padding: '0.3rem', border: '1px solid #cbd5e1', borderRadius: '4px', textAlign: 'center', fontWeight: 600 }}
+                          style={{ width: '60px', padding: '0.3rem', border: '1px solid #cbd5e1', borderRadius: '4px', textAlign: 'center', fontWeight: 600, color: p.n.startsWith('L') ? '#166534' : '#0f172a' }}
                         />
                       </td>
                       <td style={{ padding: '0.35rem 0.25rem' }}>
@@ -413,15 +468,81 @@ export const SeatSetCuttingModule = () => {
             </div>
           </div>
 
-          {/* Card 3: Cost Inputs */}
+          {/* Card 3: Material Board Rate & Cost Inputs */}
           <div style={cardStyle}>
             <h3 style={{ fontSize: '1rem', color: '#0f172a', margin: '0 0 1rem 0', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Calculator size={18} color="#0f6e56" /> Cost & Commercial Settings
+              <Calculator size={18} color="#0f6e56" /> Material Board & Cost Settings
             </h3>
+
+            {/* Board Type Selection Buttons */}
+            <label style={labelStyle}>Select Material Board Type</label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem', marginBottom: '1.25rem' }}>
+              <button
+                type="button"
+                onClick={() => handleBoardSelect('baggas')}
+                style={{
+                  padding: '0.6rem 0.4rem',
+                  border: boardType === 'baggas' ? '2px solid #0f6e56' : '1px solid #cbd5e1',
+                  backgroundColor: boardType === 'baggas' ? '#e1f5ee' : '#f8fafc',
+                  color: boardType === 'baggas' ? '#04342c' : '#475569',
+                  borderRadius: '8px',
+                  fontWeight: 700,
+                  fontSize: '0.8rem',
+                  cursor: 'pointer',
+                  textAlign: 'center'
+                }}
+              >
+                🪵 Baggas Board
+                <div style={{ fontSize: '0.75rem', color: '#0f6e56', fontWeight: 800, marginTop: '2px' }}>₹33 / sq ft</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleBoardSelect('mdf')}
+                style={{
+                  padding: '0.6rem 0.4rem',
+                  border: boardType === 'mdf' ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                  backgroundColor: boardType === 'mdf' ? '#eff6ff' : '#f8fafc',
+                  color: boardType === 'mdf' ? '#1e40af' : '#475569',
+                  borderRadius: '8px',
+                  fontWeight: 700,
+                  fontSize: '0.8rem',
+                  cursor: 'pointer',
+                  textAlign: 'center'
+                }}
+              >
+                📐 MDF Board
+                <div style={{ fontSize: '0.75rem', color: '#2563eb', fontWeight: 800, marginTop: '2px' }}>₹60 / sq ft</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleBoardSelect('custom')}
+                style={{
+                  padding: '0.6rem 0.4rem',
+                  border: boardType === 'custom' ? '2px solid #d97706' : '1px solid #cbd5e1',
+                  backgroundColor: boardType === 'custom' ? '#fffbeb' : '#f8fafc',
+                  color: boardType === 'custom' ? '#92400e' : '#475569',
+                  borderRadius: '8px',
+                  fontWeight: 700,
+                  fontSize: '0.8rem',
+                  cursor: 'pointer',
+                  textAlign: 'center'
+                }}
+              >
+                ✏️ Custom Rate
+                <div style={{ fontSize: '0.75rem', color: '#d97706', fontWeight: 800, marginTop: '2px' }}>Manual Rate</div>
+              </button>
+            </div>
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
               <div>
                 <label style={labelStyle}>Material Rate (/sq ft)</label>
-                <input type="number" min="0" style={inputStyle} value={mr} onChange={e => setMr(e.target.value)} />
+                <input
+                  type="number"
+                  min="0"
+                  style={inputStyle}
+                  value={mr}
+                  onChange={e => { setMr(e.target.value); setBoardType('custom'); }}
+                />
               </div>
               <div>
                 <label style={labelStyle}>Material Counted On</label>
@@ -431,16 +552,16 @@ export const SeatSetCuttingModule = () => {
                 </select>
               </div>
               <div>
-                <label style={labelStyle}>Import Transport (/sheet)</label>
-                <input type="number" min="0" style={inputStyle} value={it} onChange={e => setIt(e.target.value)} />
+                <label style={labelStyle}>Labour Cost (/seat)</label>
+                <input type="number" min="0" style={inputStyle} value={lab} onChange={e => setLab(e.target.value)} />
               </div>
               <div>
                 <label style={labelStyle}>Extra Material (/seat)</label>
                 <input type="number" min="0" style={inputStyle} value={em} onChange={e => setEm(e.target.value)} />
               </div>
               <div>
-                <label style={labelStyle}>Labour Cost (/seat)</label>
-                <input type="number" min="0" style={inputStyle} value={lab} onChange={e => setLab(e.target.value)} />
+                <label style={labelStyle}>Import Transport (/sheet)</label>
+                <input type="number" min="0" style={inputStyle} value={it} onChange={e => setIt(e.target.value)} />
               </div>
               <div>
                 <label style={labelStyle}>Other Fixed Cost (₹)</label>
@@ -591,7 +712,7 @@ export const SeatSetCuttingModule = () => {
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.875rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.25rem 0', borderBottom: '1px dashed #e2e8f0' }}>
-                <span>Material ({calcResults.matSqFt.toFixed(1)} sq ft × {mFmt(calcResults.materialRate)})</span>
+                <span>Material ({boardType === 'baggas' ? 'Baggas' : boardType === 'mdf' ? 'MDF' : 'Custom'} - {calcResults.matSqFt.toFixed(1)} sq ft × {mFmt(calcResults.materialRate)})</span>
                 <b>{mFmt(calcResults.matCost)}</b>
               </div>
               {calcResults.importCost > 0 && (
@@ -601,11 +722,11 @@ export const SeatSetCuttingModule = () => {
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.25rem 0', borderBottom: '1px dashed #e2e8f0' }}>
-                <span>Extra Material ({calcResults.seatsAll} seats)</span>
+                <span>Extra Material ({calcResults.seatsAll} seats × {mFmt(em)})</span>
                 <b>{mFmt(calcResults.extraMatCost)}</b>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.25rem 0', borderBottom: '1px dashed #e2e8f0' }}>
-                <span>Labour Cost ({calcResults.seatsAll} seats)</span>
+                <span>Labour Cost ({calcResults.seatsAll} seats × {mFmt(lab)})</span>
                 <b>{mFmt(calcResults.labourCost)}</b>
               </div>
               {calcResults.fixedCost > 0 && (
